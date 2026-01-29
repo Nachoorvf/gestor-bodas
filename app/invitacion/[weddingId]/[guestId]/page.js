@@ -149,6 +149,10 @@ export default function PaginaInvitacion() {
                     </div>
                 </div>
             )}
+            
+            <p className="text-boda-text-light text-sm leading-relaxed px-2">
+                    Puedes cambiar tu eleccion siempre que quieras desde este enlace <br/>
+                </p>  
 
             {/* Footer */}
             <p className="text-[10px] text-gray-300 pt-8 uppercase tracking-widest">
