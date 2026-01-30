@@ -83,18 +83,42 @@ export default function DashboardOverview() {
       </div>
 
       {/* COUNTDOWN HERO */}
-      <div className="bg-boda-green text-white p-8 rounded-3xl shadow-lg shadow-boda-green/20 mb-8 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div>
-            <p className="uppercase tracking-widest text-xs font-bold opacity-80 mb-2">Cuenta Atrás</p>
-            <p className="text-5xl md:text-7xl font-bold font-script">{daysLeft} Días</p>
-            <p className="text-sm opacity-90 mt-2">Para el gran día ({weddingData?.fecha})</p>
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-boda-green to-boda-green-dark text-white shadow-xl shadow-boda-green/20 mb-8 p-8 md:p-12">
+        {/* Decorative Background Elements */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/5 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
+
+        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end justify-between gap-8 text-center md:text-left">
+
+          <div className="flex flex-col items-center md:items-start">
+            <div className="flex items-center gap-3 mb-2 opacity-90">
+              <span className="text-xs uppercase tracking-[0.2em] font-bold">Faltan</span>
+              <div className="h-px w-8 bg-white/50"></div>
+            </div>
+
+            <div className="flex items-baseline gap-2 leading-none">
+              <span className="text-7xl md:text-9xl font-bold tracking-tighter shadow-sm">{daysLeft}</span>
+              <span className="font-script text-5xl md:text-7xl opacity-90">Días</span>
+            </div>
+
+            <p className="mt-4 text-white/90 font-medium tracking-wide">
+              Para el gran día <span className="opacity-75 mx-2">|</span> {weddingData?.fecha}
+            </p>
           </div>
-          <div className="bg-white/20 backdrop-blur-md p-4 rounded-xl text-center min-w-[150px]">
-            <span className="block text-2xl font-bold">❤️</span>
-            <span className="text-sm font-medium">Todo listo</span>
+
+          {/* Status Badge */}
+          <div className="flex flex-col items-center gap-3 bg-white/15 backdrop-blur-md border border-white/20 p-4 pr-6 rounded-full shadow-lg transform transition-transform hover:scale-105">
+            <div className="flex items-center gap-3">
+              <div className="bg-white text-red-500 rounded-full p-2 shadow-inner">
+                <span className="text-xl">❤️</span>
+              </div>
+              <div className="text-left">
+                <p className="text-xs text-white/80 font-bold uppercase tracking-wider">Estado</p>
+                <p className="text-lg font-bold">Todo listo</p>
+              </div>
+            </div>
           </div>
+
         </div>
       </div>
 
