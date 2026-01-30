@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, addDoc, collection } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../../firebase/config';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -25,19 +25,41 @@ export default function LoginPage() {
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        // Create new user profile if not exists
+        // 1. Create Wedding Logic for NEW users
+        const weddingRef = await addDoc(collection(db, 'weddings'), {
+          novios: [user.displayName || 'Novio/a', 'Pareja'], // Default names
+          fecha: '', // No date yet
+          createdAt: new Date().toISOString()
+        });
+
+        // 2. Create new user profile linked to wedding
         await setDoc(docRef, {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
           role: 'user', // Default role
-          weddingId: null, // No wedding linked yet
+          weddingId: weddingRef.id,
           createdAt: new Date().toISOString()
         });
-        router.push('/dashboard'); // New users go to dashboard/onboarding
+
+        router.push('/dashboard');
       } else {
         // Existing user logic
         const userData = docSnap.data();
+
+        // CHECK IF EXISTING USER HAS WEDDING
+        if (!userData.weddingId) {
+          // Create wedding for existing user without one (Retroactive fix)
+          const weddingRef = await addDoc(collection(db, 'weddings'), {
+            novios: [user.displayName || 'Novio/a', 'Pareja'],
+            fecha: '',
+            createdAt: new Date().toISOString()
+          });
+
+          // Update user with new weddingId
+          await setDoc(docRef, { weddingId: weddingRef.id }, { merge: true });
+        }
+
         if (userData.role === 'admin') {
           router.push('/admin');
         } else {
