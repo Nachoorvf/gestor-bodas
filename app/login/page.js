@@ -2,84 +2,95 @@
 import { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../../firebase/config'; 
+import { auth, db } from '../../firebase/config';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState(''); // Ahora guardamos "usuario", no "email"
+  const [inputIdentifier, setInputIdentifier] = useState(''); // Puede ser email O usuario
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const router = useRouter();
 
-  // DEFINIMOS TU DOMINIO "FANTASMA"
-  const DOMINIO = '@boda.com'; 
+  // DEFINIMOS TU DOMINIO "FANTASMA" PARA LEGADO
+  const DOMINIO = '@boda.com';
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError('');
 
-    // Fabricamos el email
-    const emailCompleto = username + DOMINIO;
+    // Lógica dual: Si tiene '@' es un email normal, sino es un usuario legacy
+    let emailCompleto = inputIdentifier;
+    if (!inputIdentifier.includes('@')) {
+      emailCompleto = inputIdentifier + DOMINIO;
+    }
 
     try {
-      // Usamos el email trucado para hablar con Firebase
       const userCredential = await signInWithEmailAndPassword(auth, emailCompleto, password);
       const user = userCredential.user;
 
-      const docRef = doc(db, 'users', user.uid); 
+      const docRef = doc(db, 'users', user.uid);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
         const userData = docSnap.data();
         if (userData.role === 'admin') {
-           router.push('/admin'); 
+          router.push('/admin');
         } else {
-           router.push('/dashboard'); 
+          router.push('/dashboard');
         }
       } else {
-        alert('Usuario sin rol asignado');
+        // Fallback si no tiene rol (no debería pasar con new signup)
+        router.push('/dashboard');
       }
 
     } catch (error) {
       console.error(error);
-      // Mensaje de error más amigable
-      alert('Error: Usuario o contraseña incorrectos'); 
+      setError('Usuario o contraseña incorrectos');
     }
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-2xl font-bold mb-4">Acceso a Bodas</h1>
-      <form onSubmit={handleLogin} className="flex flex-col gap-4 w-full max-w-md">
-        
-        {/* Input cambiado a tipo TEXTO, no EMAIL */}
-        <div className="flex flex-col">
-          <label className="text-sm font-bold mb-1">Usuario</label>
-          <div className="flex">
-            <input 
-              type="text" 
-              placeholder="Ej: admin" 
-              className="p-2 border border-gray-300 rounded-l w-full text-black"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
+    <div className="flex min-h-screen flex-col items-center justify-center p-8 bg-boda-bg">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-boda-pink/20">
+        <h1 className="text-2xl font-script text-boda-pink-dark text-center mb-6 text-3xl">Bienvenido</h1>
 
+        {error && <div className="bg-red-50 text-red-500 text-sm p-3 rounded mb-4 text-center">{error}</div>}
+
+        <form onSubmit={handleLogin} className="flex flex-col gap-4">
+
+          <div className="flex flex-col">
+            <label className="text-sm font-bold text-boda-text mb-1">Email o Usuario</label>
+            <input
+              type="text"
+              placeholder="ejemplo@correo.com o usuario"
+              className="p-3 border border-gray-300 rounded-lg w-full text-black focus:outline-none focus:border-boda-pink"
+              value={inputIdentifier}
+              onChange={(e) => setInputIdentifier(e.target.value)}
+            />
           </div>
-        </div>
-        
-        <div className="flex flex-col">
-           <label className="text-sm font-bold mb-1">Contraseña</label>
-           <input 
-            type="password" 
-            placeholder="******" 
-            className="p-2 border border-gray-300 rounded text-black"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        
-        <button type="submit" className="bg-pink-600 text-white p-2 rounded hover:bg-pink-700 font-bold mt-2">
-          Entrar
-        </button>
-      </form>
+
+          <div className="flex flex-col">
+            <label className="text-sm font-bold text-boda-text mb-1">Contraseña</label>
+            <input
+              type="password"
+              placeholder="******"
+              className="p-3 border border-gray-300 rounded-lg text-black focus:outline-none focus:border-boda-pink"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          <button type="submit" className="bg-boda-pink text-white py-3 rounded-lg hover:bg-boda-pink-dark font-bold mt-2 shadow-md transition-all transform hover:-translate-y-0.5">
+            Entrar
+          </button>
+        </form>
+
+        <p className="text-center mt-6 text-sm text-gray-500">
+          ¿Aún no tienes cuenta? <Link href="/signup" className="text-boda-green font-bold hover:underline">Regístrate aquí</Link>
+        </p>
+
+      </div>
     </div>
   );
 }

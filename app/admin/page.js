@@ -1,10 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../firebase/config';
-import { collection, query, onSnapshot, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, doc, getDoc, updateDoc, addDoc, where, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { createNewWedding, deleteWedding } from '../actions';
 import Link from 'next/link';
 
 export default function AdminDashboard() {
@@ -12,12 +11,9 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [bodas, setBodas] = useState([]);
-  
-  const [formData, setFormData] = useState({
-    nombre1: '', nombre2: '', fecha: '', usuario: '', password: ''
-  });
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [usersCount, setUsersCount] = useState(0);
 
-  // (Misma lógica de seguridad que antes...)
   useEffect(() => {
     const checkAdmin = async () => {
       auth.onAuthStateChanged(async (user) => {
@@ -35,11 +31,30 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!isAuthorized) return;
-    const q = query(collection(db, "weddings"), orderBy("creadoEn", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+
+    // 1. Bodas Activas
+    const qBodas = query(collection(db, "weddings"), orderBy("creadoEn", "desc"));
+    const unsubBodas = onSnapshot(qBodas, (snapshot) => {
       setBodas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-    return () => unsubscribe();
+
+    // 2. Solicitudes Pendientes
+    const qSolicitudes = query(collection(db, "wedding_requests"), where("status", "==", "pending"));
+    const unsubSolicitudes = onSnapshot(qSolicitudes, (snapshot) => {
+      setSolicitudes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // 3. Total Usuarios (KPI)
+    const qUsers = query(collection(db, "users"));
+    const unsubUsers = onSnapshot(qUsers, (snapshot) => {
+      setUsersCount(snapshot.size);
+    });
+
+    return () => {
+      unsubBodas();
+      unsubSolicitudes();
+      unsubUsers();
+    };
   }, [isAuthorized]);
 
   const handleLogout = async () => {
@@ -47,109 +62,240 @@ export default function AdminDashboard() {
     router.push('/');
   };
 
-  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
-
-  const handleDelete = async (weddingId, nombreBoda) => {
-    const confirmacion = confirm(`⚠️ ¿Borrar boda de ${nombreBoda}?`);
+  const handleDeleteWedding = async (weddingId, adminId, nombreBoda) => {
+    const confirmacion = confirm(`⚠️ PELIGRO:\n¿Estás seguro de que quieres BORRAR la boda de ${nombreBoda}?\nEsta acción eliminará permanentemente:\n- Lista de invitados\n- Confirmaciones\n- Mesas\n- Gastos\n- Usuario asociado`);
     if (!confirmacion) return;
-    const resultado = await deleteWedding(weddingId);
-    if (resultado.success) alert("🗑️ Boda eliminada.");
-    else alert("❌ Error: " + resultado.message);
-  };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
     setLoading(true);
-    const resultado = await createNewWedding(formData);
-    setLoading(false);
-    if (resultado.success) {
-      alert("✅ " + resultado.message);
-      setFormData({ nombre1: '', nombre2: '', fecha: '', usuario: '', password: '' });
-    } else {
-      alert("❌ Error: " + resultado.message);
+
+    try {
+      const batch = writeBatch(db);
+
+      // 1. Borrar subcolecciones (Guests, Tables, Expenses)
+      // Nota: Firestore no borra subcolecciones automáticamente, hay que hacerlo manual.
+      const subCollections = ['guests', 'tables', 'expenses'];
+
+      for (const subCol of subCollections) {
+        const subSnapshot = await getDocs(collection(db, 'weddings', weddingId, subCol));
+        subSnapshot.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+      }
+
+      // 2. Borrar documento de la boda
+      batch.delete(doc(db, 'weddings', weddingId));
+
+      // 3. Borrar/Desvincular usuario
+      let userId = adminId;
+      if (!userId) {
+        // Intentar buscar el usuario por weddingId si no tenemos el adminId directo
+        const qUser = query(collection(db, 'users'), where('weddingId', '==', weddingId));
+        const userSnap = await getDocs(qUser);
+        if (!userSnap.empty) {
+          userId = userSnap.docs[0].id;
+        }
+      }
+
+      if (userId) {
+        // Borramos el documento de usuario para limpiar la DB
+        batch.delete(doc(db, 'users', userId));
+      }
+
+      // Ejecutar todo el lote
+      await batch.commit();
+      alert("✅ Boda y datos eliminados correctamente.");
+
+    } catch (error) {
+      console.error(error);
+      alert("❌ Error al eliminar: " + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (!isAuthorized) return <div className="min-h-screen bg-boda-bg flex items-center justify-center text-boda-text">Verificando...</div>;
+  const handleRejectRequest = async (requestId) => {
+    if (!confirm("¿Estás seguro de rechazar y eliminar esta solicitud?")) return;
+    try {
+      await deleteDoc(doc(db, 'wedding_requests', requestId));
+    } catch (e) {
+      console.error(e);
+      alert("Error al rechazar");
+    }
+  };
+
+  const handleApprove = async (request) => {
+    if (!confirm(`¿Aprobar boda para ${request.novios.join(' y ')}?`)) return;
+    setLoading(true);
+
+    try {
+      // 1. Crear la Boda en 'weddings'
+      const weddingData = {
+        novios: request.novios,
+        fecha: request.fecha,
+        creadoEn: new Date().toISOString(),
+        adminId: request.userId,
+        invitationConfig: { // Default Config
+          location: { enabled: false },
+          bank: { enabled: false },
+          timeline: { enabled: false }
+        }
+      };
+
+      const weddingRef = await addDoc(collection(db, 'weddings'), weddingData);
+
+      // 2. Actualizar el usuario con su weddingId
+      await updateDoc(doc(db, 'users', request.userId), {
+        weddingId: weddingRef.id
+      });
+
+      // 3. Marcar solicitud como aprobada
+      await updateDoc(doc(db, 'wedding_requests', request.id), {
+        status: 'approved',
+        processedAt: new Date().toISOString()
+      });
+
+      alert("✅ Solicitud Aprobada y Boda Creada");
+
+    } catch (error) {
+      console.error(error);
+      alert("❌ Error al aprobar: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isAuthorized) return <div className="min-h-screen bg-boda-bg flex items-center justify-center text-boda-green font-bold animate-pulse">Verificando Credenciales...</div>;
 
   return (
-    <div className="min-h-screen bg-boda-bg p-8">
-      <div className="max-w-6xl mx-auto">
-        
-        {/* HEADER ADMIN */}
-        <div className="flex justify-between items-center mb-10 bg-white p-6 rounded-2xl shadow-sm border border-boda-green/10">
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+
+        {/* HEADER & NAV */}
+        <div className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
           <div>
-            <h1 className="text-3xl font-script text-boda-green mb-1">Panel de Administración</h1>
-            <p className="text-xs uppercase tracking-widest text-boda-text-light">Gestión de Clientes</p>
+            <h1 className="text-3xl font-bold text-gray-800">Panel Super Admin ⚡️</h1>
+            <p className="text-sm text-gray-500">Control total de la plataforma</p>
           </div>
-          <button onClick={handleLogout} className="text-boda-pink hover:text-red-500 font-bold text-sm transition-colors">
-            Salir
+          <button onClick={handleLogout} className="text-red-500 font-bold text-sm bg-red-50 px-4 py-2 rounded-xl hover:bg-red-100 transition">
+            Cerrar Sesión
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* TARJETA FORMULARIO */}
-          <div className="lg:col-span-1 h-fit">
-            <div className="bg-white p-8 rounded-3xl shadow-xl border-t-8 border-boda-green">
-              <h2 className="text-2xl font-serif text-boda-text mb-6">✨ Nueva Boda</h2>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <div className="flex gap-3">
-                  <input name="nombre1" type="text" placeholder="Novio/a 1" className="w-1/2 p-3 bg-boda-bg/50 border border-gray-200 rounded-xl focus:outline-none focus:border-boda-green" onChange={handleChange} value={formData.nombre1} required />
-                  <input name="nombre2" type="text" placeholder="Novio/a 2" className="w-1/2 p-3 bg-boda-bg/50 border border-gray-200 rounded-xl focus:outline-none focus:border-boda-green" onChange={handleChange} value={formData.nombre2} required />
-                </div>
-                <input name="fecha" type="date" className="w-full p-3 bg-boda-bg/50 border border-gray-200 rounded-xl text-gray-500" onChange={handleChange} value={formData.fecha} required />
-                
-                <div className="my-2 border-t border-gray-100"></div>
-                
-                <div className="flex items-center">
-                    <input name="usuario" type="text" placeholder="Usuario" className="w-full p-3 bg-boda-bg/50 border border-gray-200 rounded-l-xl focus:outline-none focus:border-boda-green" onChange={handleChange} value={formData.usuario} required />
-                    <span className="p-3 bg-gray-100 border border-gray-200 border-l-0 rounded-r-xl text-gray-400 text-sm font-bold">@boda.com</span>
-                </div>
-                <input name="password" type="text" placeholder="Contraseña prov." className="w-full p-3 bg-boda-bg/50 border border-gray-200 rounded-xl focus:outline-none focus:border-boda-green" onChange={handleChange} value={formData.password} required />
-
-                <button type="submit" disabled={loading} className="mt-4 bg-boda-text text-white py-4 rounded-xl hover:bg-black font-bold transition shadow-lg">
-                  {loading ? 'Procesando...' : 'Dar de Alta'}
-                </button>
-              </form>
+        {/* KPIs */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-3xl">👥</div>
+            <div>
+              <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Total Usuarios</p>
+              <p className="text-4xl font-black text-gray-800">{usersCount}</p>
             </div>
           </div>
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center text-3xl">💍</div>
+            <div>
+              <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Bodas Activas</p>
+              <p className="text-4xl font-black text-gray-800">{bodas.length}</p>
+            </div>
+          </div>
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center text-3xl">📩</div>
+            <div>
+              <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Solicitudes</p>
+              <p className="text-4xl font-black text-gray-800">{solicitudes.length}</p>
+            </div>
+          </div>
+        </div>
 
-          {/* LISTA DE BODAS */}
-          <div className="lg:col-span-2">
-            <h2 className="text-xl font-serif text-boda-text mb-4 ml-2">Bodas Activas ({bodas.length})</h2>
-            <div className="grid gap-4">
-              {bodas.map((boda) => (
-                <div key={boda.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col sm:flex-row justify-between items-center gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-boda-bg rounded-full flex items-center justify-center text-2xl">💍</div>
-                    <div>
-                      <h3 className="font-serif text-xl text-boda-text">
-                        {boda.novios ? `${boda.novios[0]} & ${boda.novios[1]}` : 'Sin nombres'}
-                      </h3>
-                      <p className="text-xs text-boda-text-light uppercase tracking-wider">Fecha: {boda.fecha}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+          {/* COLUMN 1: PENDING REQUESTS */}
+          <div className="lg:col-span-1 space-y-6">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              Nuevas Solicitudes <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full text-xs">{solicitudes.length}</span>
+            </h2>
+
+            {solicitudes.length === 0 ? (
+              <div className="bg-white p-8 rounded-3xl border border-dashed border-gray-300 text-center text-gray-400">
+                Todo al día. No hay solicitudes pendientes.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {solicitudes.map(req => (
+                  <div key={req.id} className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 relative overflow-hidden group">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>
+                    <h3 className="font-bold text-gray-800 text-lg">{req.novios.join(' & ')}</h3>
+                    <p className="text-xs text-gray-500 mb-1">📅 {req.fecha}</p>
+                    <p className="text-xs text-gray-400 mb-4 truncate">{req.userEmail}</p>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleApprove(req)}
+                        disabled={loading}
+                        className="flex-1 bg-gray-900 text-white py-2 rounded-lg text-xs font-bold hover:bg-black transition"
+                      >
+                        Aprobar
+                      </button>
+                      <button
+                        onClick={() => handleRejectRequest(req.id)}
+                        className="px-3 py-2 bg-red-50 text-red-500 rounded-lg text-xs font-bold hover:bg-red-100 transition"
+                      >
+                        Rechazar
+                      </button>
                     </div>
                   </div>
-                  
-                  <div className="flex gap-3">
-                    <button 
-                        onClick={() => handleDelete(boda.id, boda.novios?.join(' y '))}
-                        className="text-boda-text-light hover:text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl text-sm font-bold transition-colors"
-                    >
-                      Borrar
-                    </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-                    <Link 
-                        href={`/admin/boda/${boda.id}`}
-                        className="bg-boda-green text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-boda-green-dark shadow-md shadow-boda-green/20"
-                    >
-                      Gestionar
-                    </Link>
-                  </div>
-                </div>
-              ))}
+          {/* COLUMN 2 & 3: ACTIVE WEDDINGS */}
+          <div className="lg:col-span-2 space-y-6">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              Bodas en la Plataforma <span className="bg-green-100 text-green-600 px-2 py-0.5 rounded-full text-xs">{bodas.length}</span>
+            </h2>
+
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="p-6 text-xs font-bold text-gray-400 uppercase tracking-wider">Pareja</th>
+                    <th className="p-6 text-xs font-bold text-gray-400 uppercase tracking-wider">Fecha</th>
+                    <th className="p-6 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {bodas.map(boda => (
+                    <tr key={boda.id} className="hover:bg-gray-50/50 transition">
+                      <td className="p-6">
+                        <p className="font-bold text-gray-800 text-lg font-serif">
+                          {boda.novios ? boda.novios.join(' & ') : 'Sin nombre'}
+                        </p>
+                        <p className="text-xs text-gray-400 font-mono mt-1">ID: {boda.id.substring(0, 8)}...</p>
+                      </td>
+                      <td className="p-6">
+                        <div className="inline-flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full text-xs font-medium text-gray-600">
+                          📅 {boda.fecha}
+                        </div>
+                      </td>
+                      <td className="p-6 text-right space-x-2">
+                        <Link href={`/admin/boda/${boda.id}`} className="inline-block px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:border-gray-400 transition">
+                          👁️ Supervisar
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteWedding(boda.id, boda.adminId, boda.novios?.join(' y '))}
+                          disabled={loading}
+                          className="px-4 py-2 bg-red-50 text-red-500 rounded-xl text-xs font-bold hover:bg-red-100 transition disabled:opacity-50"
+                        >
+                          {loading ? '...' : '🗑️ Borrar'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
+
         </div>
       </div>
     </div>
