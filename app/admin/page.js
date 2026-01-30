@@ -14,6 +14,41 @@ export default function AdminDashboard() {
   const [solicitudes, setSolicitudes] = useState([]);
   const [users, setUsers] = useState([]);
 
+  // NEW: State for Create Wedding Modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newWeddingData, setNewWeddingData] = useState({
+    novio1: '', novio2: '', fecha: ''
+  });
+
+  const handleCreateWedding = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      // 1. Create Wedding
+      const weddingRef = await addDoc(collection(db, 'weddings'), {
+        novios: [newWeddingData.novio1, newWeddingData.novio2],
+        fecha: newWeddingData.fecha,
+        creadoEn: new Date().toISOString(),
+        adminId: auth.currentUser.uid, // Created by admin
+        invitationConfig: {
+          location: { enabled: false },
+          bank: { enabled: false },
+          timeline: { enabled: false }
+        }
+      });
+
+      alert("✅ Boda creada correctamente");
+      setShowCreateModal(false);
+      setNewWeddingData({ novio1: '', novio2: '', fecha: '' });
+
+    } catch (error) {
+      console.error(error);
+      alert("❌ Error al crear boda: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const checkAdmin = async () => {
       auth.onAuthStateChanged(async (user) => {
@@ -206,10 +241,75 @@ export default function AdminDashboard() {
             <h1 className="text-3xl font-bold text-gray-800">Panel Super Admin ⚡️</h1>
             <p className="text-sm text-gray-500">Control total de la plataforma</p>
           </div>
-          <button onClick={handleLogout} className="text-red-500 font-bold text-sm bg-red-50 px-4 py-2 rounded-xl hover:bg-red-100 transition">
-            Cerrar Sesión
-          </button>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-gray-900 text-white font-bold text-sm px-4 py-2 rounded-xl hover:bg-black transition shadow-lg shadow-gray-200"
+            >
+              + Crear Boda
+            </button>
+            <button onClick={handleLogout} className="text-red-500 font-bold text-sm bg-red-50 px-4 py-2 rounded-xl hover:bg-red-100 transition">
+              Cerrar Sesión
+            </button>
+          </div>
         </div>
+
+        {/* MODAL CREAR BODA */}
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-fade-in-up">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">Crear Nueva Boda</h2>
+              <form onSubmit={handleCreateWedding} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase">Novio/a 1</label>
+                  <input
+                    required
+                    type="text"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-gray-800 focus:outline-none"
+                    value={newWeddingData.novio1}
+                    onChange={e => setNewWeddingData({ ...newWeddingData, novio1: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase">Novio/a 2</label>
+                  <input
+                    required
+                    type="text"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-gray-800 focus:outline-none"
+                    value={newWeddingData.novio2}
+                    onChange={e => setNewWeddingData({ ...newWeddingData, novio2: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase">Fecha</label>
+                  <input
+                    required
+                    type="date"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-gray-800 focus:outline-none text-gray-600"
+                    value={newWeddingData.fecha}
+                    onChange={e => setNewWeddingData({ ...newWeddingData, fecha: e.target.value })}
+                  />
+                </div>
+                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-6 py-2 bg-gray-900 text-white font-bold rounded-lg hover:bg-black transition shadow-md"
+                  >
+                    {loading ? 'Creando...' : 'Crear Boda'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

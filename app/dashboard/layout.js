@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'firebase/auth';
@@ -9,8 +9,32 @@ import { useRouter } from 'next/navigation';
 
 export default function DashboardLayout({ children }) {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
     const pathname = usePathname();
     const router = useRouter();
+
+    useEffect(() => {
+        const checkRole = async () => {
+            const user = auth.currentUser;
+            if (user) {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists() && userDoc.data().role === 'admin') {
+                    setIsAdmin(true);
+                }
+            }
+        };
+        // Check initially and maybe set up listener if needed, but on load is fine for layout
+        // Better: use onAuthStateChanged locally or assume auth is ready if we are in dashboard
+        const unsub = auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists() && userDoc.data().role === 'admin') {
+                    setIsAdmin(true);
+                }
+            }
+        });
+        return () => unsub();
+    }, []);
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -54,21 +78,15 @@ export default function DashboardLayout({ children }) {
                 </nav>
                 <div className="p-4 border-t border-gray-100 space-y-2">
                     {/* BACK TO ADMIN BUTTON - ONLY FOR ADMINS */}
-                    <button
-                        onClick={async () => {
-                            const user = auth.currentUser;
-                            if (user) {
-                                const userDoc = await getDoc(doc(db, 'users', user.uid));
-                                if (userDoc.exists() && userDoc.data().role === 'admin') {
-                                    router.push('/admin');
-                                }
-                            }
-                        }}
-                        className="flex items-center gap-3 px-4 py-3 w-full text-boda-text-light hover:text-boda-pink hover:bg-pink-50 rounded-xl transition-all font-medium text-sm"
-                    >
-                        <span>🛡️</span>
-                        <span>Volver a Admin</span>
-                    </button>
+                    {isAdmin && (
+                        <button
+                            onClick={() => router.push('/admin')}
+                            className="flex items-center gap-3 px-4 py-3 w-full text-boda-text-light hover:text-boda-pink hover:bg-pink-50 rounded-xl transition-all font-medium text-sm"
+                        >
+                            <span>🛡️</span>
+                            <span>Volver a Admin</span>
+                        </button>
+                    )}
 
                     <button
                         onClick={handleLogout}
