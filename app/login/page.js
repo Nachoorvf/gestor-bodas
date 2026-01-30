@@ -1,8 +1,8 @@
 'use client';
 import { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../../firebase/config';
+import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db, googleProvider } from '../../firebase/config';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -14,6 +14,42 @@ export default function LoginPage() {
 
   // DEFINIMOS TU DOMINIO "FANTASMA" PARA LEGADO
   const DOMINIO = '@boda.com';
+
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      // Check if user exists in Firestore
+      const docRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        // Create new user profile if not exists
+        await setDoc(docRef, {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          role: 'user', // Default role
+          weddingId: null, // No wedding linked yet
+          createdAt: new Date().toISOString()
+        });
+        router.push('/dashboard'); // New users go to dashboard/onboarding
+      } else {
+        // Existing user logic
+        const userData = docSnap.data();
+        if (userData.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/dashboard');
+        }
+      }
+
+    } catch (error) {
+      console.error("Google Auth Error", error);
+      setError('Error al iniciar con Google. Verifica tu conexión.');
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -85,6 +121,21 @@ export default function LoginPage() {
             Entrar
           </button>
         </form>
+
+        <div className="flex items-center my-6">
+          <div className="flex-grow border-t border-gray-200"></div>
+          <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold uppercase">O continúa con</span>
+          <div className="flex-grow border-t border-gray-200"></div>
+        </div>
+
+        <button
+          onClick={handleGoogleLogin}
+          type="button"
+          className="w-full flex items-center justify-center gap-3 bg-white border border-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-50 font-bold transition-all shadow-sm"
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+          Google
+        </button>
 
         <p className="text-center mt-6 text-sm text-gray-500">
           ¿Aún no tienes cuenta? <Link href="/signup" className="text-boda-green font-bold hover:underline">Regístrate aquí</Link>
