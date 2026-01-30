@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { doc, getDoc, setDoc, addDoc, collection } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../../firebase/config';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -25,45 +25,30 @@ export default function LoginPage() {
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        // 1. Create Wedding Logic for NEW users
-        const weddingRef = await addDoc(collection(db, 'weddings'), {
-          novios: [user.displayName || 'Novio/a', 'Pareja'], // Default names
-          fecha: '', // No date yet
-          createdAt: new Date().toISOString()
-        });
-
-        // 2. Create new user profile linked to wedding
+        // 1. Create NEW user profile (without wedding)
         await setDoc(docRef, {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
-          role: 'user', // Default role
-          weddingId: weddingRef.id,
+          role: 'user',
+          weddingId: null, // No wedding yet
           createdAt: new Date().toISOString()
         });
 
-        router.push('/dashboard');
+        // 2. Redirect to Request Wedding for new users
+        router.push('/request-wedding');
+
       } else {
         // Existing user logic
         const userData = docSnap.data();
 
-        // CHECK IF EXISTING USER HAS WEDDING
-        if (!userData.weddingId) {
-          // Create wedding for existing user without one (Retroactive fix)
-          const weddingRef = await addDoc(collection(db, 'weddings'), {
-            novios: [user.displayName || 'Novio/a', 'Pareja'],
-            fecha: '',
-            createdAt: new Date().toISOString()
-          });
-
-          // Update user with new weddingId
-          await setDoc(docRef, { weddingId: weddingRef.id }, { merge: true });
-        }
-
         if (userData.role === 'admin') {
           router.push('/admin');
-        } else {
+        } else if (userData.weddingId) {
           router.push('/dashboard');
+        } else {
+          // User exists but has no wedding -> Redirect to Request Wedding
+          router.push('/request-wedding');
         }
       }
 
