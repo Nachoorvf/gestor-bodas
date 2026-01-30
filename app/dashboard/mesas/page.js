@@ -27,6 +27,9 @@ export default function MesasPage() {
     // ZOOM STATE
     const [zoom, setZoom] = useState(1);
 
+    const [activeTab, setActiveTab] = useState('map'); // 'guests', 'map', 'summary'
+    const [selectedGuestId, setSelectedGuestId] = useState(null); // For click-to-assign
+
     // 1. Auth & Initial Load
     useEffect(() => {
         const fetchUserData = async () => {
@@ -103,8 +106,9 @@ export default function MesasPage() {
         });
     };
 
-    // --- TABLE MOVING LOGIC (WITH ZOOM) ---
+    // --- TABLE MOVING LOGIC (WITH ZOOM & TOUCH) ---
 
+    // ... Collision check logic helper ...
     const checkCollision = (id, x, y, type) => {
         const myW = TABLE_TYPES[type].width;
         const myH = TABLE_TYPES[type].height;
@@ -125,36 +129,62 @@ export default function MesasPage() {
         });
     };
 
+    // MOUSE DOWN
     const onTableMouseDown = (e, table) => {
-        e.stopPropagation(); // Don't trigger canvas click
+        e.stopPropagation();
+        // If we are in "Guest Selection Mode", clicking a table assigns the guest, doesn't drag
+        if (selectedGuestId) {
+            onAssignGuestToTable(selectedGuestId, table.id);
+            return;
+        }
+
         setDraggingTableId(table.id);
         const rect = e.currentTarget.getBoundingClientRect();
-
-        // Correct offset by dividing by zoom
         setDragOffset({
             x: (e.clientX - rect.left) / zoom,
             y: (e.clientY - rect.top) / zoom
         });
     };
 
-    const onCanvasMouseMove = (e) => {
+    // TOUCH START
+    const onTableTouchStart = (e, table) => {
+        e.stopPropagation();
+        // Prevent default only if we mean to interact to avoid scrolling map if not intended,
+        // but usually we want to drag.
+
+        if (selectedGuestId) {
+            e.preventDefault(); // prevent scroll
+            onAssignGuestToTable(selectedGuestId, table.id);
+            return;
+        }
+
+        // Only handle single touch
+        if (e.touches.length !== 1) return;
+
+        setDraggingTableId(table.id);
+        const touch = e.touches[0];
+        const rect = e.currentTarget.getBoundingClientRect();
+        setDragOffset({
+            x: (touch.clientX - rect.left) / zoom,
+            y: (touch.clientY - rect.top) / zoom
+        });
+    };
+
+    // SHARED MOVE LOGIC
+    const moveTable = (clientX, clientY) => {
         if (!draggingTableId) return;
         if (!canvasRef.current) return;
 
         const canvasRect = canvasRef.current.getBoundingClientRect();
 
-        // Calculate X/Y taking zoom into account
-        // (MousePos - CanvasStart) / Zoom - Offset
-        const x = (e.clientX - canvasRect.left) / zoom - dragOffset.x;
-        const y = (e.clientY - canvasRect.top) / zoom - dragOffset.y;
+        const x = (clientX - canvasRect.left) / zoom - dragOffset.x;
+        const y = (clientY - canvasRect.top) / zoom - dragOffset.y;
 
-        // Boundary checks (relative to internal canvas size 100% W/H?)
-        // The canvas is visually infinite or fixed? 
-        // For now let's use the bounding rect of the container / zoom to get "virtual" width
         const virtualWidth = canvasRect.width / zoom;
         const virtualHeight = canvasRect.height / zoom;
 
         const table = tables.find(t => t.id === draggingTableId);
+        if (!table) return;
         const type = table.type || 'standard';
         const w = TABLE_TYPES[type].width;
         const h = TABLE_TYPES[type].height;
@@ -167,13 +197,24 @@ export default function MesasPage() {
                 t.id === draggingTableId ? { ...t, position: { x: finalX, y: finalY } } : t
             ));
         }
+    }
+
+    const onCanvasMouseMove = (e) => {
+        moveTable(e.clientX, e.clientY);
     };
 
-    const onCanvasMouseUp = async () => {
+    const onCanvasTouchMove = (e) => {
+        if (!draggingTableId) return;
+        if (e.touches.length !== 1) return;
+        e.preventDefault(); // Critical to prevent scrolling while dragging
+        const touch = e.touches[0];
+        moveTable(touch.clientX, touch.clientY);
+    };
+
+    const finishDrag = async () => {
         if (draggingTableId) {
             const table = tables.find(t => t.id === draggingTableId);
             if (table) {
-                // Save final position
                 await updateDoc(doc(db, 'weddings', weddingId, 'tables', draggingTableId), {
                     position: table.position
                 });
@@ -182,7 +223,11 @@ export default function MesasPage() {
         }
     };
 
-    // --- GUEST DRAGGING LOGIC ---
+    const onCanvasMouseUp = () => finishDrag();
+    const onCanvasTouchEnd = () => finishDrag();
+
+
+    // --- GUEST DRAGGING & ASSIGNMENT ---
 
     const onDragStartGuest = (e, guest, sourceTableId) => {
         setDraggingGuest({ guest, sourceTableId });
@@ -194,11 +239,17 @@ export default function MesasPage() {
         e.stopPropagation();
         const guestId = e.dataTransfer.getData("guestId");
         if (!guestId) return;
+        await onAssignGuestToTable(guestId, targetTableId);
+    };
 
+    const onAssignGuestToTable = async (guestId, targetTableId) => {
         await updateDoc(doc(db, 'weddings', weddingId, 'guests', guestId), {
             tableId: targetTableId
         });
         setDraggingGuest(null);
+        setSelectedGuestId(null); // Clear selection after assignment
+        // Feedback
+        // alert("Asignado!");
     };
 
     const onGuestDragOver = (e) => {
@@ -210,33 +261,80 @@ export default function MesasPage() {
         const guestId = e.dataTransfer.getData("guestId");
         if (!guestId) return;
 
-        await updateDoc(doc(db, 'weddings', weddingId, 'guests', guestId), {
-            tableId: null
-        });
+        await unassignGuest(guestId);
         setDraggingGuest(null);
+    };
+
+    const handleGuestClick = (guestId) => {
+        if (selectedGuestId === guestId) {
+            setSelectedGuestId(null); // Toggle off
+        } else {
+            setSelectedGuestId(guestId); // Select
+            // Automatically switch to map view on mobile if selecting from guest list
+            if (activeTab === 'guests') {
+                // Optional: delay slightly or just let user switch. 
+                // Let's autoswitch to help the flow.
+                setTimeout(() => setActiveTab('map'), 200);
+            }
+        }
     };
 
 
     if (loading) return <div className="p-8 text-center text-boda-text-light">Cargando...</div>;
 
     return (
-        <div className="h-[calc(100vh-100px)] flex flex-col" onMouseUp={onCanvasMouseUp} onMouseMove={onCanvasMouseMove}>
-            <div className="flex justify-between items-center mb-6">
+        <div
+            className="h-[calc(100vh-100px)] flex flex-col"
+            onMouseUp={onCanvasMouseUp}
+            onMouseMove={onCanvasMouseMove}
+            onTouchEnd={onCanvasTouchEnd}
+            onTouchMove={onCanvasTouchMove}
+        >
+            {/* TOOLBAR */}
+            <div className="flex justify-between items-center mb-4 md:mb-6 px-1">
                 <div>
-                    <h1 className="text-3xl font-serif text-boda-text">Plano de Mesas</h1>
-                    <p className="text-xs text-gray-400">Arrastra invitados y organiza tu salón</p>
+                    <h1 className="text-2xl md:text-3xl font-serif text-boda-text">Plano de Mesas</h1>
+                    <p className="text-xs text-gray-400 hidden md:block">Arrastra invitados o pulsa para asignar</p>
+                    <p className="text-xs text-gray-400 md:hidden">
+                        {selectedGuestId ? '👉 Ahora toca una mesa' : '1. Toca invitados para seleccionar'}
+                    </p>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => handleAddTable('standard')} className="bg-boda-green text-white px-4 py-2 rounded-xl font-bold shadow-md hover:bg-boda-green-dark transition text-sm">+ Redonda</button>
-                    <button onClick={() => handleAddTable('presidential')} className="bg-purple-500 text-white px-4 py-2 rounded-xl font-bold shadow-md hover:bg-purple-600 transition text-sm">+ Presidencial</button>
+                    <button onClick={() => handleAddTable('standard')} className="bg-boda-green text-white px-3 py-1.5 md:px-4 md:py-2 rounded-xl font-bold shadow-md hover:bg-boda-green-dark transition text-xs md:text-sm">+ Redonda</button>
+                    <button onClick={() => handleAddTable('presidential')} className="bg-purple-500 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-xl font-bold shadow-md hover:bg-purple-600 transition text-xs md:text-sm">+ Presid.</button>
                 </div>
             </div>
 
-            <div className="flex-1 flex gap-4 overflow-hidden h-full">
+            {/* MOBILE TABS */}
+            <div className="md:hidden flex mb-4 bg-white rounded-xl p-1 shadow-sm border border-gray-100">
+                <button
+                    onClick={() => setActiveTab('guests')}
+                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition ${activeTab === 'guests' ? 'bg-boda-green text-white shadow' : 'text-gray-500'}`}
+                >
+                    Invitados ({unassignedGuests.length})
+                </button>
+                <button
+                    onClick={() => setActiveTab('map')}
+                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition ${activeTab === 'map' ? 'bg-boda-green text-white shadow' : 'text-gray-500'}`}
+                >
+                    Mapa
+                </button>
+                <button
+                    onClick={() => setActiveTab('summary')}
+                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition ${activeTab === 'summary' ? 'bg-boda-green text-white shadow' : 'text-gray-500'}`}
+                >
+                    Resumen
+                </button>
+            </div>
+
+            <div className="flex-1 flex gap-4 overflow-hidden h-full relative">
 
                 {/* LEFT SIDEBAR: UNASSIGNED */}
                 <div
-                    className="w-64 bg-white rounded-2xl shadow-sm border border-gray-200 p-4 flex flex-col h-full z-20 shrink-0 hidden md:flex"
+                    className={`
+                        w-full md:w-64 bg-white rounded-2xl shadow-sm border border-gray-200 p-4 flex flex-col h-full z-20 shrink-0
+                        ${activeTab === 'guests' ? 'flex' : 'hidden md:flex'}
+                    `}
                     onDragOver={onGuestDragOver}
                     onDrop={onDropSidebar}
                 >
@@ -250,9 +348,16 @@ export default function MesasPage() {
                                 key={guest.id}
                                 draggable
                                 onDragStart={(e) => onDragStartGuest(e, guest, null)}
-                                className="p-3 bg-gray-50 border border-gray-100 rounded-lg text-sm text-gray-600 cursor-grab active:cursor-grabbing hover:bg-white hover:shadow-sm transition flex items-center gap-2"
+                                onClick={() => handleGuestClick(guest.id)}
+                                className={`
+                                    p-3 border rounded-lg text-sm cursor-pointer transition flex items-center gap-2 select-none
+                                    ${selectedGuestId === guest.id
+                                        ? 'bg-boda-green text-white border-boda-green shadow-md transform scale-105'
+                                        : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-white hover:shadow-sm'
+                                    }
+                                `}
                             >
-                                <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+                                <span className={`w-2 h-2 rounded-full ${selectedGuestId === guest.id ? 'bg-white' : 'bg-orange-400'}`}></span>
                                 {guest.nombre}
                             </div>
                         ))}
@@ -261,7 +366,10 @@ export default function MesasPage() {
                 </div>
 
                 {/* CENTER: CANVAS TOOL */}
-                <div className="flex-1 relative overflow-hidden bg-gray-100 rounded-2xl border-2 border-dashed border-gray-200 min-w-[300px]">
+                <div className={`
+                    flex-1 relative overflow-hidden bg-gray-100 rounded-2xl border-2 border-dashed border-gray-200 min-w-0
+                    ${activeTab === 'map' ? 'block' : 'hidden md:block'}
+                `}>
                     {/* ZOOM CONTROLS */}
                     <div className="absolute top-4 right-4 z-50 flex gap-2 bg-white p-2 rounded-xl shadow-md">
                         <button onClick={() => setZoom(Math.max(0.4, zoom - 0.1))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-lg">-</button>
@@ -272,11 +380,11 @@ export default function MesasPage() {
                     {/* SCALABLE CANVAS */}
                     <div
                         ref={canvasRef}
-                        className="w-full h-full relative"
+                        className="w-full h-full relative touch-none" // touch-none prevents browser zooming/scrolling on the canvas
                         style={{
                             transform: `scale(${zoom})`,
                             transformOrigin: '0 0',
-                            width: `${100 / zoom}%`, // Compensate width to fill container
+                            width: `${100 / zoom}%`,
                             height: `${100 / zoom}%`
                         }}
                     >
@@ -295,6 +403,7 @@ export default function MesasPage() {
                                 <div
                                     key={table.id}
                                     onMouseDown={(e) => onTableMouseDown(e, table)}
+                                    onTouchStart={(e) => onTableTouchStart(e, table)}
                                     onDragOver={onGuestDragOver}
                                     onDrop={(e) => onDropTable(e, table.id)}
                                     style={{
@@ -303,8 +412,10 @@ export default function MesasPage() {
                                         width: cfg.width,
                                         height: cfg.height,
                                     }}
-                                    className={`absolute bg-white shadow-xl border-2 hover:border-boda-green cursor-move transition-shadow
-                                        ${cfg.shape} ${isDragging ? 'shadow-2xl scale-105 z-50 border-boda-green' : 'z-10 border-gray-100'}
+                                    className={`absolute bg-white shadow-xl border-2 transition-shadow cursor-move
+                                        ${cfg.shape} 
+                                        ${isDragging ? 'shadow-2xl scale-105 z-50 border-boda-green' : 'z-10 border-gray-100'}
+                                        ${selectedGuestId ? 'animate-pulse ring-4 ring-boda-green/20' : ''} 
                                         flex flex-col items-center justify-center p-2 group
                                     `}
                                 >
@@ -318,6 +429,8 @@ export default function MesasPage() {
                                             <div key={g.id} className="w-2 h-2 rounded-full bg-green-400" title={g.nombre}></div>
                                         ))}
                                     </div>
+
+                                    {/* Mobile: Show delete button on tap? Or keep it in Summary tab. Let's keep cleaning UI. */}
                                 </div>
                             );
                         })}
@@ -325,7 +438,10 @@ export default function MesasPage() {
                 </div>
 
                 {/* RIGHT SIDEBAR: TABLE LIST MANAGEMENT */}
-                <div className="w-72 bg-white rounded-2xl shadow-sm border border-gray-200 p-4 flex flex-col h-full z-20 shrink-0 hidden lg:flex">
+                <div className={`
+                    w-full md:w-72 bg-white rounded-2xl shadow-sm border border-gray-200 p-4 flex flex-col h-full z-20 shrink-0
+                    ${activeTab === 'summary' ? 'flex' : 'hidden md:flex'}
+                `}>
                     <h3 className="font-bold text-boda-text mb-4 text-sm uppercase">Resumen de Mesas</h3>
                     <div className="space-y-4 overflow-y-auto flex-1 pr-2">
                         {tables.length === 0 && <p className="text-xs text-center text-gray-300 py-10">Crea una mesa para empezar</p>}
