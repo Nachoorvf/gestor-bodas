@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { doc, getDoc, setDoc, addDoc, collection } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../../firebase/config';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -42,27 +42,11 @@ export default function LoginPage() {
         // Existing user logic
         const userData = docSnap.data();
 
-        // SUPER ADMIN AUTO-CREATE LOGIC
-        if (userData.role === 'admin' && !userData.weddingId) {
-          const weddingRef = await addDoc(collection(db, 'weddings'), {
-            novios: [user.displayName || 'Admin', 'Pareja'],
-            fecha: '',
-            createdAt: new Date().toISOString()
-          });
-
-          await setDoc(docRef, { weddingId: weddingRef.id }, { merge: true });
-          router.push('/dashboard');
-          return; // Exit early
-        }
-
         if (userData.role === 'admin') {
-          // If admin has a wedding, they probably want to see it on dashboard, 
-          // but they can switch back to admin panel.
-          if (userData.weddingId) {
-            router.push('/dashboard');
-          } else {
-            router.push('/admin');
-          }
+          // Admin logic: Redirect to Admin Panel mostly, but if they have a wedding they might want dashboard.
+          // User asked: "contact admin to delete account".
+          // Let's redirect admins to /admin by default so they can manage things.
+          router.push('/admin');
         } else if (userData.weddingId) {
           router.push('/dashboard');
         } else {

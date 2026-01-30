@@ -37,7 +37,12 @@ export default function AdminDashboard() {
         }
       });
 
-      alert("✅ Boda creada correctamente");
+      // 2. CRITICAL: Link this wedding to the Admin User ID so they "own" it for testing
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        weddingId: weddingRef.id
+      });
+
+      alert("✅ Boda de prueba creada y vinculada a tu cuenta");
       setShowCreateModal(false);
       setNewWeddingData({ novio1: '', novio2: '', fecha: '' });
 
@@ -242,12 +247,26 @@ export default function AdminDashboard() {
             <p className="text-sm text-gray-500">Control total de la plataforma</p>
           </div>
           <div className="flex gap-4">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="bg-gray-900 text-white font-bold text-sm px-4 py-2 rounded-xl hover:bg-black transition shadow-lg shadow-gray-200"
-            >
-              + Crear Boda
-            </button>
+            {(() => {
+              const currentUserData = users.find(u => u.id === auth.currentUser?.uid);
+              const adminHasWedding = currentUserData?.weddingId;
+              return adminHasWedding ? (
+                <Link
+                  href="/dashboard"
+                  className="bg-indigo-600 text-white font-bold text-sm px-4 py-2 rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 flex items-center gap-2"
+                >
+                  👁️ Ver mi Boda de Prueba
+                </Link>
+              ) : (
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="bg-gray-900 text-white font-bold text-sm px-4 py-2 rounded-xl hover:bg-black transition shadow-lg shadow-gray-200"
+                >
+                  + Crear Boda de Prueba
+                </button>
+              );
+            })()}
+
             <button onClick={handleLogout} className="text-red-500 font-bold text-sm bg-red-50 px-4 py-2 rounded-xl hover:bg-red-100 transition">
               Cerrar Sesión
             </button>
