@@ -63,7 +63,7 @@ export default function DashboardLayout({ children }) {
             </aside>
 
             {/* MOBILE HEADER */}
-            <div className="md:hidden fixed top-0 w-full h-16 bg-white border-b border-gray-100 z-50 flex items-center justify-between px-4">
+            <div className="md:hidden fixed top-0 w-full h-16 bg-white border-b border-gray-100 z-[110] flex items-center justify-between px-4">
                 <span className="font-script text-2xl text-boda-green-dark">Gestor Bodas</span>
                 <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="text-boda-text">
                     {isSidebarOpen ? '✖' : '☰'}
@@ -72,7 +72,7 @@ export default function DashboardLayout({ children }) {
 
             {/* MOBILE SIDEBAR */}
             {isSidebarOpen && (
-                <div className="md:hidden fixed inset-0 bg-boda-bg z-40 pt-20 px-4 animate-fade-in-up">
+                <div className="md:hidden fixed inset-0 bg-boda-bg z-[100] pt-20 px-4 animate-fade-in-up">
                     <nav className="space-y-2">
                         {navItems.map((item) => (
                             <Link
@@ -98,7 +98,7 @@ export default function DashboardLayout({ children }) {
             )}
 
             {/* MAIN CONTENT AREA */}
-            <main className="flex-1 overflow-y-auto pt-16 md:pt-0">
+            <main className="flex-1 overflow-y-auto pt-16 md:pt-0 relative z-0">
                 <div className="max-w-7xl mx-auto p-4 md:p-8">
                     {children}
                 </div>
