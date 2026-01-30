@@ -3,7 +3,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'firebase/auth';
-import { auth } from '../../firebase/config';
+import { auth, db } from '../../firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 export default function DashboardLayout({ children }) {
@@ -51,7 +52,24 @@ export default function DashboardLayout({ children }) {
                         );
                     })}
                 </nav>
-                <div className="p-4 border-t border-gray-100">
+                <div className="p-4 border-t border-gray-100 space-y-2">
+                    {/* BACK TO ADMIN BUTTON - ONLY FOR ADMINS */}
+                    <button
+                        onClick={async () => {
+                            const user = auth.currentUser;
+                            if (user) {
+                                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                                if (userDoc.exists() && userDoc.data().role === 'admin') {
+                                    router.push('/admin');
+                                }
+                            }
+                        }}
+                        className="flex items-center gap-3 px-4 py-3 w-full text-boda-text-light hover:text-boda-pink hover:bg-pink-50 rounded-xl transition-all font-medium text-sm"
+                    >
+                        <span>🛡️</span>
+                        <span>Volver a Admin</span>
+                    </button>
+
                     <button
                         onClick={handleLogout}
                         className="flex items-center gap-3 px-4 py-3 w-full text-boda-text-light hover:text-red-500 hover:bg-red-50 rounded-xl transition-all font-medium text-sm"
