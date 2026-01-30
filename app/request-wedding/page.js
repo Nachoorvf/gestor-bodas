@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { addDoc, collection, doc, getDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import { useRouter } from 'next/navigation';
 import Button from '../../components/ui/Button';
@@ -22,10 +22,23 @@ export default function RequestWeddingPage() {
                 router.push('/login');
             } else {
                 setUser(currentUser);
-                // Check if already has wedding
+                // 1. Check if already has wedding
                 const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
                 if (userDoc.exists() && userDoc.data().weddingId) {
                     router.push('/dashboard');
+                    return;
+                }
+
+                // 2. Check if has PENDING request
+                const q = query(
+                    collection(db, 'wedding_requests'),
+                    where('userId', '==', currentUser.uid),
+                    where('status', '==', 'pending')
+                );
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    // Already has a pending request -> Show success/processing view
+                    setStatus('success');
                 }
             }
         });
