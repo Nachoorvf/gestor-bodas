@@ -11,12 +11,17 @@ export default function InvitadosPage() {
     const [weddingId, setWeddingId] = useState(null);
     const [guests, setGuests] = useState([]);
     const [nuevoInvitado, setNuevoInvitado] = useState('');
+    const [nuevoTelefono, setNuevoTelefono] = useState('');
+    const [isContactSupported, setIsContactSupported] = useState(false);
 
     // MODAL STATE
     const [editingGuest, setEditingGuest] = useState(null);
     const [tempData, setTempData] = useState({});
 
     useEffect(() => {
+        // Check if Contact Picker API is supported
+        setIsContactSupported('contacts' in navigator && 'ContactsManager' in window);
+
         const fetchUserData = async () => {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { router.push('/login'); return; }
@@ -39,20 +44,54 @@ export default function InvitadosPage() {
         return () => unsubscribe();
     }, [weddingId]);
 
+    const handleImportContact = async () => {
+        try {
+            const props = ['name', 'tel'];
+            const contacts = await navigator.contacts.select(props, { multiple: false });
+
+            if (contacts.length) {
+                const contact = contacts[0];
+                if (contact.name && contact.name.length) setNuevoInvitado(contact.name[0]);
+                if (contact.tel && contact.tel.length) {
+                    // Simple cleanup of phone number
+                    setNuevoTelefono(contact.tel[0].replace(/\s/g, ''));
+                }
+            }
+        } catch (ex) {
+            console.error("Error importing contact", ex);
+            // Ignore errors (user cancelled)
+        }
+    };
+
     const handleAddGuest = async (e) => {
         e.preventDefault();
         if (!nuevoInvitado.trim()) return;
+
         await addDoc(collection(db, 'weddings', weddingId, 'guests'), {
-            nombre: nuevoInvitado, confirmado: null, bus: false, creadoEn: new Date().toISOString()
+            nombre: nuevoInvitado,
+            telefono: nuevoTelefono,
+            confirmado: null,
+            bus: false,
+            creadoEn: new Date().toISOString()
         });
         setNuevoInvitado('');
+        setNuevoTelefono('');
     };
 
-    const copiarEnlace = (e, guestId, nombre) => {
+    const sendWhatsApp = (e, guestId, nombre, telefono) => {
         e.stopPropagation();
         const url = `${window.location.origin}/invitacion/${weddingId}/${guestId}`;
-        navigator.clipboard.writeText(`Hola ${nombre}! Confirma aquí: ${url}`);
-        alert("¡Enlace copiado! 📋");
+        const message = `Hola ${nombre}! Me encantaría que vinieras a mi boda. Confirma tu asistencia aquí: ${url}`;
+        const encodedMessage = encodeURIComponent(message);
+
+        let waUrl = `https://wa.me/?text=${encodedMessage}`;
+        if (telefono) {
+            // Ensure phone has no symbols for WA link, maybe just digits
+            const cleanPhone = telefono.replace(/\D/g, '');
+            waUrl = `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
+        }
+
+        window.open(waUrl, '_blank');
     };
 
     const openEditModal = (guest) => {
@@ -65,7 +104,8 @@ export default function InvitadosPage() {
             const docRef = doc(db, 'weddings', weddingId, 'guests', editingGuest.id);
             await updateDoc(docRef, {
                 confirmado: tempData.confirmado,
-                bus: tempData.bus
+                bus: tempData.bus,
+                telefono: tempData.telefono // Save phone edits too
             });
             setEditingGuest(null);
         } catch (error) {
@@ -96,12 +136,24 @@ export default function InvitadosPage() {
                 {/* ADD GUEST CARD */}
                 <div className="md:col-span-1">
                     <Card className="sticky top-8">
-                        <h2 className="font-bold text-lg text-boda-text mb-4">Añadir Nuevo</h2>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="font-bold text-lg text-boda-text">Añadir Nuevo</h2>
+                            {isContactSupported && (
+                                <button type="button" onClick={handleImportContact} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg font-bold hover:bg-blue-100">
+                                    📒 Agenda
+                                </button>
+                            )}
+                        </div>
                         <form onSubmit={handleAddGuest} className="flex flex-col gap-3">
                             <input
-                                type="text" placeholder="Nombre del invitado"
+                                type="text" placeholder="Nombre"
                                 className="border border-gray-200 p-3 rounded-xl w-full text-boda-text focus:outline-none focus:border-boda-green bg-gray-50"
                                 value={nuevoInvitado} onChange={(e) => setNuevoInvitado(e.target.value)}
+                            />
+                            <input
+                                type="tel" placeholder="Teléfono (Opcional)"
+                                className="border border-gray-200 p-3 rounded-xl w-full text-boda-text focus:outline-none focus:border-boda-green bg-gray-50"
+                                value={nuevoTelefono} onChange={(e) => setNuevoTelefono(e.target.value)}
                             />
                             <button type="submit" className="bg-boda-green text-white p-3 rounded-xl font-bold hover:bg-boda-green-dark transition-all">
                                 + Añadir
@@ -121,22 +173,23 @@ export default function InvitadosPage() {
                             >
                                 <div className="flex items-center gap-4">
                                     <div className={`w-3 h-3 rounded-full ${guest.confirmado === true ? 'bg-green-500' :
-                                            guest.confirmado === false ? 'bg-red-400' : 'bg-gray-300'
+                                        guest.confirmado === false ? 'bg-red-400' : 'bg-gray-300'
                                         }`}></div>
                                     <div>
                                         <p className="font-bold text-boda-text">{guest.nombre}</p>
                                         <div className="flex gap-2 text-[10px] uppercase font-bold text-gray-400">
                                             {guest.confirmado === true ? 'Confirmado' : guest.confirmado === false ? 'No Asiste' : 'Pendiente'}
                                             {guest.bus && <span className="text-purple-500">• Bus</span>}
+                                            {guest.telefono && <span className="text-blue-400">• 📱</span>}
                                         </div>
                                     </div>
                                 </div>
 
                                 <button
-                                    onClick={(e) => copiarEnlace(e, guest.id, guest.nombre)}
-                                    className="text-boda-green hover:bg-green-50 px-3 py-1 rounded-full text-xs font-bold transition-colors"
+                                    onClick={(e) => sendWhatsApp(e, guest.id, guest.nombre, guest.telefono)}
+                                    className="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1 rounded-full text-xs font-bold transition-colors flex items-center gap-1"
                                 >
-                                    Link
+                                    <span>WhatsApp</span>
                                 </button>
                             </div>
                         ))}
