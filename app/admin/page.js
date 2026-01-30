@@ -12,7 +12,7 @@ export default function AdminDashboard() {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [bodas, setBodas] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
-  const [usersCount, setUsersCount] = useState(0);
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -44,10 +44,10 @@ export default function AdminDashboard() {
       setSolicitudes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    // 3. Total Usuarios (KPI)
+    // 3. Usuarios (Lista Completa)
     const qUsers = query(collection(db, "users"));
     const unsubUsers = onSnapshot(qUsers, (snapshot) => {
-      setUsersCount(snapshot.size);
+      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     return () => {
@@ -72,9 +72,7 @@ export default function AdminDashboard() {
       const batch = writeBatch(db);
 
       // 1. Borrar subcolecciones (Guests, Tables, Expenses)
-      // Nota: Firestore no borra subcolecciones automáticamente, hay que hacerlo manual.
       const subCollections = ['guests', 'tables', 'expenses'];
-
       for (const subCol of subCollections) {
         const subSnapshot = await getDocs(collection(db, 'weddings', weddingId, subCol));
         subSnapshot.forEach((doc) => {
@@ -88,7 +86,7 @@ export default function AdminDashboard() {
       // 3. Borrar/Desvincular usuario
       let userId = adminId;
       if (!userId) {
-        // Intentar buscar el usuario por weddingId si no tenemos el adminId directo
+        // Intentar buscar el usuario por weddingId
         const qUser = query(collection(db, 'users'), where('weddingId', '==', weddingId));
         const userSnap = await getDocs(qUser);
         if (!userSnap.empty) {
@@ -97,17 +95,49 @@ export default function AdminDashboard() {
       }
 
       if (userId) {
-        // Borramos el documento de usuario para limpiar la DB
         batch.delete(doc(db, 'users', userId));
       }
 
-      // Ejecutar todo el lote
       await batch.commit();
       alert("✅ Boda y datos eliminados correctamente.");
 
     } catch (error) {
       console.error(error);
       alert("❌ Error al eliminar: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (user) => {
+    const confirmacion = confirm(`⚠️ DESTRUCCIÓN TOTAL:\n¿Vas a borrar al usuario ${user.email}?\n\nSi tiene una boda, SE BORRARÁ TAMBIÉN (invitados, mesas, todo).\n\n¿Proceder?`);
+    if (!confirmacion) return;
+
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+
+      // 1. Si tiene boda, borrar todo lo de la boda
+      if (user.weddingId) {
+        const subCollections = ['guests', 'tables', 'expenses'];
+        for (const subCol of subCollections) {
+          const subSnapshot = await getDocs(collection(db, 'weddings', user.weddingId, subCol));
+          subSnapshot.forEach((doc) => {
+            batch.delete(doc.ref);
+          });
+        }
+        // Borrar Boda
+        batch.delete(doc(db, 'weddings', user.weddingId));
+      }
+
+      // 2. Borrar Usuario
+      batch.delete(doc(db, 'users', user.id));
+
+      await batch.commit();
+      alert("✅ Usuario y sus datos eliminados.");
+    } catch (error) {
+      console.error(error);
+      alert("❌ Error: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -187,7 +217,7 @@ export default function AdminDashboard() {
             <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-3xl">👥</div>
             <div>
               <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Total Usuarios</p>
-              <p className="text-4xl font-black text-gray-800">{usersCount}</p>
+              <p className="text-4xl font-black text-gray-800">{users.length}</p>
             </div>
           </div>
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
@@ -297,7 +327,56 @@ export default function AdminDashboard() {
           </div>
 
         </div>
+
+        {/* SECTION: USERS MANAGEMENT */}
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+            <h2 className="text-xl font-bold text-gray-800">Gestión de Usuarios</h2>
+            <span className="text-xs font-bold bg-white border px-3 py-1 rounded-full text-gray-500">{users.length} Registrados</span>
+          </div>
+          <table className="w-full text-left">
+            <thead className="bg-white border-b border-gray-100">
+              <tr>
+                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Usuario / Email</th>
+                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Rol</th>
+                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Boda Asociada</th>
+                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {users.map(u => (
+                <tr key={u.id} className="hover:bg-gray-50 transition">
+                  <td className="p-4">
+                    <div className="font-bold text-gray-700">{u.displayName || 'Sin Nombre'}</div>
+                    <div className="text-xs text-gray-400">{u.email}</div>
+                  </td>
+                  <td className="p-4">
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${u.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600'}`}>
+                      {u.role || 'user'}
+                    </span>
+                  </td>
+                  <td className="p-4 text-xs text-gray-500 font-mono">
+                    {u.weddingId ? (
+                      <Link href={`/admin/boda/${u.weddingId}`} className="text-blue-500 hover:underline">
+                        {u.weddingId}
+                      </Link>
+                    ) : <span className="text-gray-300">Ninguna</span>}
+                  </td>
+                  <td className="p-4 text-right">
+                    <button
+                      onClick={() => handleDeleteUser(u)}
+                      className="bg-red-50 text-red-500 hover:bg-red-100 px-3 py-1 rounded-lg text-xs font-bold transition"
+                      title="Borrar Usuario y Boda"
+                    >
+                      🗑️ Eliminar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </div >
   );
 }
