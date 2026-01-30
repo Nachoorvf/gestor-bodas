@@ -82,12 +82,15 @@ export default function LoginPage() {
         const userData = docSnap.data();
         if (userData.role === 'admin') {
           router.push('/admin');
-        } else {
+        } else if (userData.weddingId) {
           router.push('/dashboard');
+        } else {
+          // User has no wedding -> Redirect to Request Wedding (which handles Pending check)
+          router.push('/request-wedding');
         }
       } else {
-        // Fallback si no tiene rol (no debería pasar con new signup)
-        router.push('/dashboard');
+        // Fallback: If user doc is missing or weird state, send to request wedding to be safe
+        router.push('/request-wedding');
       }
 
     } catch (error) {
