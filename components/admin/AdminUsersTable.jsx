@@ -13,68 +13,72 @@ export default function AdminUsersTable({ users, requests = [], onDelete, onEdit
     };
 
     return (
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                    <thead className="bg-white border-b border-gray-100">
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50/50 border-b border-gray-100">
                         <tr>
-                            <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Usuario</th>
-                            <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Rol</th>
-                            <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Boda</th>
-                            <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Estado</th>
-                            <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Acciones</th>
+                            <th className="p-8 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Usuario</th>
+                            <th className="p-8 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Rol</th>
+                            <th className="p-8 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Boda Vinculada</th>
+                            <th className="p-8 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Estado</th>
+                            <th className="p-8 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] text-right">Acciones</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                         {users.map(u => {
                             const status = getUserStatus(u);
                             return (
-                                <tr key={u.id} className="hover:bg-gray-50 transition">
-                                    <td className="p-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${u.role === 'admin' ? 'bg-boda-text text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                <tr key={u.id} className="hover:bg-gray-50/50 transition duration-200 group">
+                                    <td className="p-8">
+                                        <div className="flex items-center gap-5">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-serif italic ${u.role === 'admin' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
                                                 {(u.displayName && u.displayName[0]) ? u.displayName[0].toUpperCase() : (u.email && u.email[0]) ? u.email[0].toUpperCase() : '?'}
                                             </div>
                                             <div>
-                                                <div className="font-bold text-gray-800 text-sm">{u.displayName || 'Sin Nombre'}</div>
-                                                <div className="text-xs text-gray-400">{u.email}</div>
+                                                <div className="font-serif text-lg text-boda-text group-hover:text-black transition-colors">{u.displayName || 'Sin Nombre'}</div>
+                                                <div className="text-xs text-gray-400 font-light tracking-wide">{u.email}</div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="p-6">
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider ${u.role === 'admin' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'bg-gray-100 text-gray-500'}`}>
-                                            {u.role || 'user'}
-                                        </span>
-                                    </td>
-                                    <td className="p-6">
-                                        {u.weddingId ? (
-                                            <Link href={`/admin/boda/${u.weddingId}`} className="text-xs font-bold text-boda-accent hover:underline flex items-center gap-1">
-                                                <span>🔗</span> {u.weddingId.substring(0, 8)}...
-                                            </Link>
+                                    <td className="p-8">
+                                        {u.role === 'admin' ? (
+                                            <span className="text-[10px] font-bold px-3 py-1 bg-black text-white uppercase tracking-widest rounded-full">Admin</span>
                                         ) : (
-                                            <span className="text-xs text-gray-300 italic">--</span>
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">User</span>
                                         )}
                                     </td>
-                                    <td className="p-6">
-                                        <span className={`text-[10px] font-bold px-3 py-1 rounded-full border ${status.color}`}>
+                                    <td className="p-8">
+                                        {u.weddingId ? (
+                                            <Link href={`/admin/boda/${u.weddingId}`} className="text-sm font-serif italic text-boda-accent hover:border-b hover:border-boda-accent transition-all pb-0.5">
+                                                Ver Boda
+                                            </Link>
+                                        ) : (
+                                            <span className="text-xs text-gray-300">--</span>
+                                        )}
+                                    </td>
+                                    <td className="p-8">
+                                        <span className={`text-[10px] font-bold px-3 py-1 uppercase tracking-widest border ${status.color.replace('bg-', 'bg-transparent text-').replace('text-wh', 'text-gr')}`}>
                                             {status.label}
                                         </span>
                                     </td>
-                                    <td className="p-6 text-right">
-                                        <button
-                                            onClick={() => onEdit(u)}
-                                            className="text-boda-text hover:text-boda-text-light font-bold text-xs transition px-3 py-1 rounded hover:bg-gray-50 mr-2"
-                                            title="Editar Usuario"
-                                        >
-                                            ✏️ Editar
-                                        </button>
-                                        <button
-                                            onClick={() => onDelete(u)}
-                                            className="text-red-300 hover:text-red-500 font-bold text-xs transition px-3 py-1 rounded hover:bg-red-50"
-                                            title="Eliminar Usuario"
-                                        >
-                                            🗑️
-                                        </button>
+                                    <td className="p-8 text-right">
+                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                                onClick={() => onEdit(u)}
+                                                className="p-2 text-gray-400 hover:text-black transition-colors"
+                                                title="Editar Usuario"
+                                            >
+                                                ✏️
+                                            </button>
+                                            <button
+                                                onClick={() => onDelete(u)}
+                                                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                                title="Eliminar Usuario"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             );

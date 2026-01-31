@@ -10,6 +10,7 @@ export default function PaginaInvitacion() {
   const [boda, setBoda] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
+  const [animateEntrance, setAnimateEntrance] = useState(false);
 
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
@@ -26,6 +27,7 @@ export default function PaginaInvitacion() {
         if (bodaSnap.exists() && guestSnap.exists()) {
           setBoda(bodaSnap.data());
           setGuest(guestSnap.data());
+          setTimeout(() => setAnimateEntrance(true), 100);
         }
       } catch (error) {
         console.error(error);
@@ -80,113 +82,133 @@ export default function PaginaInvitacion() {
     setGuest(prev => ({ ...prev, bus: nuevoEstado }));
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-boda-bg text-boda-green font-bold animate-pulse">Cargando invitación...</div>;
-  if (!boda || !guest) return <div className="text-center p-10">Invitación no encontrada</div>;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#F9F9F9]">
+      <div className="animate-pulse flex flex-col items-center">
+        <span className="text-4xl mb-4">🌿</span>
+        <p className="font-serif text-[#333] tracking-widest text-sm uppercase">Cargando Invitación...</p>
+      </div>
+    </div>
+  );
+
+  if (!boda || !guest) return <div className="text-center p-10 font-serif text-[#333]">Invitación no encontrada</div>;
 
   const config = boda.invitationConfig || {};
   const busConfig = boda.busConfig || {};
 
   return (
-    <div className="min-h-screen bg-boda-bg flex items-center justify-center p-4 md:p-8 relative">
+    <div className="min-h-screen bg-[#F0F0F0] flex items-center justify-center p-4 md:p-8 relative overflow-hidden">
+      {/* BACKGROUND TEXTURE */}
+      <div className="absolute inset-0 opacity-40 bg-[url('https://www.transparenttextures.com/patterns/linen.png')] mix-blend-multiply"></div>
 
-      <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden relative border border-white/50 pb-10">
+      {/* MAIN CARD CONTAINER - GLASSMORPHISM */}
+      <div className={`
+          w-full max-w-md bg-white/90 backdrop-blur-xl rounded-[2rem] shadow-2xl overflow-hidden relative border border-white/50 pb-10 transition-all duration-1000 ease-out transform
+          ${animateEntrance ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}
+      `}>
 
-        {/* HEADER */}
-        <div className="h-40 bg-gradient-to-b from-slate-50 to-white flex items-center justify-center relative overflow-hidden">
-          <span className="text-6xl z-10 opacity-80">🌿</span>
+        {/* HEADER IMAGE / BANNER */}
+        <div className="h-56 bg-gray-100 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519741497674-611481863552?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center opacity-80 filter grayscale hover:grayscale-0 transition-all duration-1000"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent"></div>
         </div>
 
-        <div className="px-8 text-center space-y-8 -mt-10 relative z-10">
+        <div className="px-8 text-center space-y-8 -mt-20 relative z-10">
 
-          {/* INFO BODA */}
-          <div>
-            <p className="text-boda-text-light text-xs tracking-[0.3em] uppercase font-bold mb-4 opacity-70">
-              {boda.fecha}
+          {/* WEDDING INFO */}
+          <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-sm border border-gray-50">
+            <p className="text-[#333] text-[10px] tracking-[0.3em] uppercase font-bold mb-4 opacity-60">
+              {new Date(boda.fecha).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
-            <h1 className="font-serif text-5xl text-boda-text mb-2 leading-tight">
-              {boda.novios ? boda.novios[0] : ''} <span className="text-3xl text-boda-green italic">&</span> {boda.novios ? boda.novios[1] : ''}
+            <h1 className="font-display text-5xl text-[#333] mb-2 leading-none">
+              {boda.novios ? boda.novios[0] : ''}
+              <span className="text-3xl text-boda-accent italic mx-3">&</span>
+              {boda.novios ? boda.novios[1] : ''}
             </h1>
+          </div>
 
-            <div className="flex justify-center gap-4 mt-6 mb-6 scale-90">
-              <TimeBox num={timeLeft.days} label="Días" />
-              <TimeBox num={timeLeft.hours} label="Hrs" />
-              <TimeBox num={timeLeft.minutes} label="Min" />
-            </div>
+          {/* COUNTDOWN */}
+          <div className="flex justify-center gap-6 py-4">
+            <TimeBox num={timeLeft.days} label="Días" />
+            <div className="h-8 w-[1px] bg-gray-200 self-center"></div>
+            <TimeBox num={timeLeft.hours} label="Hrs" />
           </div>
 
           {/* FORMAL TEXT */}
-          <div className="pt-2">
-            <p className="font-serif italic text-xl text-boda-text mb-4">
-              Querido/a {guest.nombre},
+          <div className="px-2">
+            <p className="font-display italic text-2xl text-[#333] mb-4">
+              Querido/a {guest.nombre.split(' ')[0]},
             </p>
-            <p className="text-boda-text-light text-sm leading-relaxed px-4 font-light">
-              Tenemos el inmenso placer de invitarte a celebrar nuestro enlace. Un día lleno de amor que no sería lo mismo sin ti.
+            <p className="text-[#333]/80 text-sm leading-relaxed font-light font-sans">
+              "Tenemos el inmenso placer de invitarte a celebrar nuestro enlace. Un día lleno de amor que no sería lo mismo sin ti."
             </p>
           </div>
 
-          {/* CONFIRMACION */}
-          <div className="flex justify-center gap-4 pt-2">
+          {/* RSVP ACTIONS */}
+          <div className="flex flex-col gap-3 pt-2">
             <button
               onClick={() => responder(true)}
-              className={`px-8 py-3 rounded-full transition-all duration-500 font-serif text-sm ${guest.confirmado === true
-                ? 'bg-boda-text text-white shadow-xl scale-105'
-                : 'bg-transparent border border-boda-text text-boda-text hover:bg-boda-text hover:text-white'
+              className={`w-full py-4 rounded-xl transition-all duration-500 font-bold text-xs uppercase tracking-[0.2em] relative overflow-hidden group ${guest.confirmado === true
+                ? 'bg-[#333] text-white shadow-xl'
+                : 'bg-white border border-[#333] text-[#333] hover:bg-[#333] hover:text-white'
                 }`}
             >
-              Asistiré
+              <span className="relative z-10">{guest.confirmado === true ? 'Asistencia Confirmada ✓' : 'Confirmar Asistencia'}</span>
             </button>
 
-            <button
-              onClick={() => responder(false)}
-              className={`px-6 py-3 rounded-full transition-all duration-300 font-serif text-xs ${guest.confirmado === false
-                ? 'bg-gray-200 text-gray-500 shadow-inner'
-                : 'text-gray-400 hover:text-gray-600'
-                }`}
-            >
-              No podré
-            </button>
+            {guest.confirmado !== false && (
+              <button
+                onClick={() => responder(false)}
+                className="text-[10px] text-gray-400 uppercase tracking-widest hover:text-red-400 transition-colors py-2"
+              >
+                No podré asistir
+              </button>
+            )}
+            {guest.confirmado === false && (
+              <p className="text-xs text-gray-400 italic">Has indicado que no asistirás.</p>
+            )}
           </div>
 
           {/* MODULE ICONS */}
-          <div className="flex justify-center flex-wrap gap-6 pt-8 border-t border-gray-50">
-
+          <div className="grid grid-cols-3 gap-4 pt-6 border-t border-gray-100">
             {config.location?.enabled && (
               <ModuleButton icon="📍" label="Mapa" onClick={() => setActiveModal('location')} />
             )}
-
             {config.timeline?.enabled && config.timeline.events?.length > 0 && (
               <ModuleButton icon="📅" label="Agenda" onClick={() => setActiveModal('timeline')} />
             )}
-
             {config.bank?.enabled && (
               <ModuleButton icon="🎁" label="Regalo" onClick={() => setActiveModal('bank')} />
             )}
-
-            {/* BUS BTN: ONLY VISIBLE IF ACTIVATED IN DASHBOARD AND GUEST CONFIRMED */}
+            {/* BUS BTN: ONLY IF CONFIRMED */}
             {guest.confirmado === true && busConfig.enabled && (
               <ModuleButton icon="🚌" label="Bus" onClick={() => setActiveModal('bus')} active={guest.bus} />
             )}
-
           </div>
 
         </div>
       </div>
 
-      {/* --- MODALS --- */}
+      {/* --- MODALS (REFINED) --- */}
       {activeModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setActiveModal(null)}>
-          <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl relative animate-scale-up" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200">×</button>
+        <div className="fixed inset-0 bg-[#333]/60 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4 animate-fade-in" onClick={() => setActiveModal(null)}>
+          <div
+            className="bg-white w-full max-w-sm rounded-t-[2rem] md:rounded-[2rem] p-8 pb-12 md:pb-8 shadow-2xl relative animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-6 md:hidden"></div>
+
+            <button onClick={() => setActiveModal(null)} className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100 transition hidden md:flex">×</button>
 
             {/* LOCATION MODAL */}
             {activeModal === 'location' && (
               <div className="text-center">
-                <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">📍</div>
-                <h3 className="font-serif text-2xl mb-2 text-boda-text">Ubicación</h3>
-                <p className="text-gray-600 mb-6 font-light">{config.location.address}</p>
+                <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl text-[#333]">📍</div>
+                <h3 className="font-display text-2xl mb-2 text-[#333]">Ubicación</h3>
+                <p className="text-gray-500 mb-8 font-light text-sm px-4">{config.location.address}</p>
                 {config.location.mapUrl && (
-                  <a href={config.location.mapUrl} target="_blank" className="bg-boda-text text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg hover:bg-black transition block">
-                    Abrir en Google Maps
+                  <a href={config.location.mapUrl} target="_blank" className="block w-full py-4 bg-[#333] text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg hover:bg-black transition">
+                    Ver en Google Maps
                   </a>
                 )}
               </div>
@@ -195,14 +217,14 @@ export default function PaginaInvitacion() {
             {/* TIMELINE MODAL */}
             {activeModal === 'timeline' && (
               <div className="text-center">
-                <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">📅</div>
-                <h3 className="font-serif text-2xl mb-6 text-boda-text">Agenda del Día</h3>
-                <div className="space-y-0 text-left relative pl-4 border-l border-gray-100 ml-4 max-h-[50vh] overflow-y-auto">
+                <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl text-[#333]">📅</div>
+                <h3 className="font-display text-2xl mb-6 text-[#333]">Agenda</h3>
+                <div className="space-y-0 text-left relative pl-6 border-l border-gray-100 ml-6 max-h-[50vh] overflow-y-auto pr-2">
                   {config.timeline.events.map((ev, i) => (
-                    <div key={i} className="mb-6 relative">
-                      <div className="absolute -left-[21px] top-1 w-3 h-3 bg-purple-400 rounded-full border-2 border-white"></div>
-                      <span className="font-bold text-sm text-boda-text block">{ev.time}</span>
-                      <span className="text-sm text-gray-500 font-light">{ev.title}</span>
+                    <div key={i} className="mb-8 relative last:mb-0">
+                      <div className="absolute -left-[31px] top-1 w-4 h-4 bg-[#333] rounded-full border-4 border-white shadow-sm"></div>
+                      <span className="font-bold text-lg text-[#333] block leading-none mb-1">{ev.time}</span>
+                      <span className="text-sm text-gray-500 font-light uppercase tracking-wide">{ev.title}</span>
                     </div>
                   ))}
                 </div>
@@ -212,42 +234,43 @@ export default function PaginaInvitacion() {
             {/* BANK MODAL */}
             {activeModal === 'bank' && (
               <div className="text-center">
-                <div className="w-16 h-16 bg-pink-50 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🎁</div>
-                <h3 className="font-serif text-2xl mb-4 text-boda-text">Regalo</h3>
-                <p className="text-gray-600 mb-6 italic text-sm">"{config.bank.message || 'Vuestra presencia es nuestro mejor regalo'}"</p>
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <p className="text-xs text-gray-400 mb-1 uppercase tracking-widest">IBAN / Cuenta</p>
-                  <p className="font-mono text-sm text-gray-800 select-all font-bold">{config.bank.iban}</p>
+                <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl text-[#333]">🎁</div>
+                <h3 className="font-display text-2xl mb-4 text-[#333]">Regalo</h3>
+                <p className="text-gray-500 mb-6 italic font-serif leading-relaxed px-4">"{config.bank.message || 'Vuestra presencia es nuestro mejor regalo'}"</p>
+                <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 relative overflow-hidden group">
+                  <p className="text-[10px] text-gray-400 mb-2 uppercase tracking-widest font-bold">IBAN / Cuenta</p>
+                  <p className="font-mono text-sm text-[#333] select-all font-medium tracking-wide">{config.bank.iban}</p>
                 </div>
               </div>
             )}
 
-            {/* BUS MODAL (UPDATED WITH CONFIG) */}
+            {/* BUS MODAL */}
             {activeModal === 'bus' && (
               <div className="text-center">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl transition-colors ${guest.bus ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'}`}>🚌</div>
-                <h3 className="font-serif text-2xl mb-2 text-boda-text">Servicio de Autobús</h3>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl transition-colors ${guest.bus ? 'bg-[#333] text-white' : 'bg-gray-50 text-[#333]'}`}>🚌</div>
+                <h3 className="font-display text-2xl mb-2 text-[#333]">Autobús</h3>
+                <p className="text-xs text-gray-400 uppercase tracking-widest mb-6">Información de rutas</p>
 
-                <div className="bg-purple-50 rounded-xl p-4 my-6 text-left space-y-3">
+                <div className="bg-gray-50 rounded-xl p-5 mb-6 text-left space-y-4 border border-gray-100">
                   {busConfig.routes?.map(r => (
-                    <div key={r.id}>
-                      <p className="text-xs font-bold text-purple-800 uppercase mb-1">{r.name}</p>
-                      <p className="text-sm text-gray-700">🕙 <b>{r.time || '--:--'}</b> - {r.location || 'Por definir'}</p>
+                    <div key={r.id} className="flex justify-between items-start">
+                      <div>
+                        <p className="text-[10px] font-bold text-[#333] uppercase mb-1">{r.name}</p>
+                        <p className="text-sm text-gray-600">{r.location || 'Ubicación pendiente'}</p>
+                      </div>
+                      <div className="bg-white px-2 py-1 rounded text-xs font-bold border border-gray-100 shadow-sm">{r.time || '--:--'}</div>
                     </div>
                   ))}
-                  {busConfig.notes && (
-                    <p className="text-xs text-gray-500 italic pt-2 border-t border-purple-100">{busConfig.notes}</p>
-                  )}
                 </div>
 
                 <button
                   onClick={() => toggleBus()}
-                  className={`w-full py-3 rounded-xl font-bold transition-all ${guest.bus
-                    ? 'bg-purple-500 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  className={`w-full py-4 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${guest.bus
+                    ? 'bg-[#333] text-white shadow-lg'
+                    : 'bg-white border border-gray-200 text-gray-500 hover:border-[#333] hover:text-[#333]'
                     }`}
                 >
-                  {guest.bus ? 'Sí, quiero plaza en el bus ✓' : 'Confirmar plaza en el bus'}
+                  {guest.bus ? 'Plaza Reservada ✓' : 'Reservar Plaza'}
                 </button>
               </div>
             )}
@@ -262,27 +285,26 @@ export default function PaginaInvitacion() {
 
 function TimeBox({ num, label }) {
   return (
-    <div className="flex flex-col items-center">
-      <div className="w-12 h-12 rounded-full border border-boda-green/30 flex items-center justify-center mb-1 bg-white shadow-sm">
-        <span className="font-serif text-lg text-boda-text">
-          {num < 10 ? `0${num}` : num}
-        </span>
-      </div>
-      <span className="text-[9px] uppercase tracking-widest text-boda-text-light">{label}</span>
+    <div className="flex flex-col items-center min-w-[3rem]">
+      <span className="font-display text-3xl text-[#333] leading-none mb-1">
+        {num < 10 ? `0${num}` : num}
+      </span>
+      <span className="text-[9px] uppercase tracking-[0.2em] text-gray-400">{label}</span>
     </div>
   );
 }
 
 function ModuleButton({ icon, label, onClick, active }) {
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-2 group">
-      <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-sm border transition-all duration-300 group-hover:scale-110 ${active
-        ? 'bg-boda-text text-white border-boda-text shadow-lg'
-        : 'bg-white border-gray-100 text-gray-600 hover:border-boda-green/50'
+    <button onClick={onClick} className="flex flex-col items-center gap-2 group p-2 rounded-xl hover:bg-gray-50 transition-colors">
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg shadow-sm border transition-all duration-300 group-hover:scale-110 ${active
+        ? 'bg-[#333] text-white border-[#333]'
+        : 'bg-white border-gray-100 text-gray-500 group-hover:border-[#333]'
         }`}>
         {icon}
       </div>
-      <span className="text-[10px] uppercase tracking-widest text-gray-400 group-hover:text-boda-text transition-colors">{label}</span>
+      <span className="text-[9px] uppercase tracking-widest text-gray-400 group-hover:text-[#333] transition-colors">{label}</span>
+      {active && <div className="w-1 h-1 bg-[#333] rounded-full mt-[-4px]"></div>}
     </button>
   );
 }

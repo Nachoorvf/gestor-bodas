@@ -32,83 +32,90 @@ export default function DashboardLayout({ children }) {
         <div className="min-h-screen bg-boda-bg font-body selection:bg-boda-accent selection:text-white">
 
             {/* TOP NAVIGATION BAR */}
-            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 transition-all duration-300">
-                <div className="max-w-7xl mx-auto px-4 md:px-8 h-20 flex items-center justify-between">
+            <header className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-xl border-b border-gray-100 transition-all duration-300">
+                {/* Gold Top Accent */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-boda-accent to-transparent opacity-50"></div>
+
+                <div className="max-w-7xl mx-auto px-6 md:px-12 h-24 flex items-center justify-between">
 
                     {/* 1. LOGO */}
-                    <div className="flex-shrink-0">
-                        <Link href="/dashboard" className="font-script text-3xl text-boda-text tracking-wide hover:opacity-80 transition-opacity">
-                            El Convite
+                    <div className="flex-shrink-0 group cursor-pointer">
+                        <Link href="/dashboard" className="flex flex-col items-center md:items-start group">
+                            <span className="font-script text-3xl md:text-4xl text-boda-text tracking-wide group-hover:opacity-80 transition-opacity">
+                                El Convite
+                            </span>
                         </Link>
                     </div>
 
                     {/* 2. DESKTOP NAVIGATION */}
-                    <nav className="hidden md:flex items-center gap-8">
+                    <nav className="hidden md:flex items-center gap-10">
                         {navItems.map((item) => {
                             const isActive = pathname === item.href;
                             return (
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    className={`text-sm font-medium tracking-wide transition-colors duration-200 ${isActive
-                                        ? 'text-boda-text border-b-2 border-boda-text pb-1'
-                                        : 'text-gray-500 hover:text-boda-text'
-                                        }`}
+                                    className={`text-xs font-bold uppercase tracking-[0.15em] transition-all duration-300 relative py-2 
+                                        ${isActive ? 'text-boda-text' : 'text-gray-400 hover:text-boda-text'}`
+                                    }
                                 >
                                     {item.name}
+                                    {isActive && (
+                                        <span className="absolute bottom-0 left-0 w-full h-px bg-boda-accent"></span>
+                                    )}
                                 </Link>
                             );
                         })}
                     </nav>
 
                     {/* 3. ACTIONS & MOBILE TOGGLE */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-6">
                         {isAdmin && (
                             <button
                                 onClick={() => router.push('/admin')}
-                                className="hidden md:flex items-center gap-2 px-4 py-2 text-xs font-bold text-boda-text border border-gray-200 rounded-full hover:bg-gray-50 transition"
+                                className="hidden md:flex items-center gap-2 px-6 py-2.5 text-[10px] uppercase font-bold tracking-widest text-white bg-boda-text hover:bg-black transition-all shadow-lg hover:shadow-xl"
                             >
-                                🛡️ Admin
+                                Admin Panel
                             </button>
                         )}
 
                         <button
                             onClick={handleLogout}
-                            className="hidden md:flex text-xs font-bold text-gray-400 hover:text-red-500 transition"
+                            className="hidden md:flex text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-boda-error transition-colors border-b border-transparent hover:border-boda-error pb-0.5"
                         >
-                            Salir
+                            Cerrar Sesión
                         </button>
 
                         {/* Mobile Menu Button */}
                         <button
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                            className="md:hidden text-boda-text p-2"
+                            className="md:hidden text-boda-text p-2 hover:bg-gray-50 rounded-full transition"
                         >
-                            <span className="text-2xl">{isMobileMenuOpen ? '✕' : '☰'}</span>
+                            <span className="text-2xl font-light">{isMobileMenuOpen ? '✕' : '☰'}</span>
                         </button>
                     </div>
                 </div>
 
                 {/* MOBILE MENU DROPDOWN */}
                 {isMobileMenuOpen && (
-                    <div className="md:hidden absolute top-20 left-0 w-full bg-white border-b border-gray-100 p-4 shadow-xl animate-fade-in-up">
-                        <nav className="flex flex-col space-y-4">
+                    <div className="md:hidden absolute top-24 left-0 w-full bg-white/95 backdrop-blur-xl border-b border-gray-100 p-8 shadow-2xl animate-fade-in-up h-screen">
+                        <nav className="flex flex-col space-y-6 text-center">
                             {navItems.map((item) => (
                                 <Link
                                     key={item.href}
                                     href={item.href}
                                     onClick={() => setIsMobileMenuOpen(false)}
-                                    className={`text-lg font-medium px-4 py-2 rounded-lg ${pathname === item.href ? 'bg-gray-50 text-boda-text' : 'text-gray-500'
+                                    className={`text-xl font-serif italic py-2 ${pathname === item.href ? 'text-boda-accent' : 'text-boda-text'
                                         }`}
                                 >
                                     {item.name}
                                 </Link>
                             ))}
-                            <div className="border-t border-gray-100 my-2 pt-2"></div>
+                            <div className="w-12 h-px bg-gray-200 mx-auto my-4"></div>
                             {isAdmin && (
-                                <Link href="/admin" className="px-4 py-2 font-bold text-boda-text block">🛡️ Panel Admin</Link>
+                                <Link href="/admin" className="text-xs font-bold uppercase tracking-widest text-boda-text">Ir a Admin</Link>
                             )}
-                            <button onClick={handleLogout} className="px-4 py-2 font-bold text-red-500 block w-full text-left">
+                            <button onClick={handleLogout} className="text-xs font-bold uppercase tracking-widest text-red-400 mt-4">
                                 Cerrar Sesión
                             </button>
                         </nav>

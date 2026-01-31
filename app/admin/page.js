@@ -181,31 +181,39 @@ export default function AdminDashboard() {
   const filteredWeddings = bodas.filter(b => b.novios?.some(n => (n || '').toLowerCase().includes(searchTerm.toLowerCase())) || (b.id || '').includes(searchTerm));
 
   return (
-    <div className="min-h-screen bg-gray-50/50 p-6 md:p-12 font-body text-gray-800">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#F0F0F0] font-body text-gray-800">
+
+      {/* BACKGROUND TEXTURE */}
+      <div className="fixed inset-0 z-0 opacity-[0.4]" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/p5.png")' }}></div>
+
+      <div className="relative z-10 max-w-7xl mx-auto p-6 md:p-12 space-y-12">
 
         {/* HEADER */}
         <AdminHeader user={user} onLogout={handleLogout} />
 
-        {/* SEARCH & ACTIONS BAR */}
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        {/* SEARCH & ACTIONS BAR - Executive Style */}
+        <div className="flex flex-col md:flex-row gap-6 items-center justify-between bg-white p-4 rounded-full shadow-lg shadow-gray-200/50 border border-gray-100">
+
           {/* Global Search */}
           <div className="relative w-full md:w-96">
             <input
               type="text"
-              placeholder="🔍 Buscar usuarios, bodas, IDs..."
-              className="w-full pl-5 pr-4 py-3 rounded-xl border border-gray-200 focus:border-boda-text focus:ring-1 focus:ring-boda-text outline-none transition shadow-sm"
+              placeholder="Buscar usuarios, bodas, IDs..."
+              className="w-full pl-6 pr-4 py-3 bg-transparent border-none focus:outline-none focus:ring-0 text-gray-600 placeholder-gray-400 font-medium"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300">🔍</span>
           </div>
+
+          <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
 
           {/* Create Test Wedding Button */}
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-6 py-3 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-xl hover:bg-gray-50 hover:border-gray-300 transition shadow-sm"
+            className="px-8 py-3 bg-black text-white text-xs font-bold uppercase tracking-widest rounded-full hover:bg-boda-accent transition-colors duration-300 shadow-md"
           >
-            + Boda de Prueba
+            + Nueva Boda
           </button>
         </div>
 

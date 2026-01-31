@@ -26,6 +26,7 @@ module.exports = {
       },
       fontFamily: {
         script: ['var(--font-script)', 'serif'], // Mapped to Playfair Display
+        display: ['var(--font-display)', 'serif'], // Mapped to Cormorant Garamond
         body: ['var(--font-body)', 'sans-serif'], // Mapped to Inter
       },
       keyframes: {

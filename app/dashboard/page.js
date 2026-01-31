@@ -3,10 +3,30 @@ import { useState, useEffect } from 'react';
 import { db } from '../../firebase/config';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import Card from '../../components/ui/Card';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import DashboardSkeleton from '../../components/loaders/DashboardSkeleton';
+import { IconUsers, IconWallet, IconTable, IconBrush, IconEnvelope, IconDiamond } from '../../components/ui/Icons';
+
+const weddingTips = [
+  "Los pequeños detalles son la suma del diseño.",
+  "Invierte en un buen fotógrafo, los recuerdos son para siempre.",
+  "Haz una lista de canciones prohibidas para el DJ.",
+  "No olvides comer algo antes de la ceremonia.",
+  "Ten un plan B para la lluvia, incluso en verano.",
+  "Agradece a tus invitados personalmente durante el banquete.",
+  "Confirma la asistencia 1 mes antes del evento.",
+  "Delega tareas el día de la boda, ¡disfruta!",
+  "Prueba los zapatos de la boda en casa días antes.",
+  "La iluminación crea el 80% del ambiente."
+];
+
+const getWeekNumber = (d) => {
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+};
 
 export default function DashboardOverview() {
   const router = useRouter();
@@ -20,13 +40,13 @@ export default function DashboardOverview() {
   });
 
   useEffect(() => {
-    // 1. Auth Check (Redirect if not logged in)
+    // 1. Auth Check
     if (!authLoading && !user) {
       router.push('/login');
       return;
     }
 
-    // 2. Fetch Wedding Data if User has Wedding
+    // 2. Fetch Data
     const fetchWeddingDetails = async () => {
       if (userData?.weddingId) {
         const weddingDoc = await getDoc(doc(db, 'weddings', userData.weddingId));
@@ -73,126 +93,99 @@ export default function DashboardOverview() {
   if (authLoading) return <DashboardSkeleton />;
 
   const daysLeft = calculateDaysLeft(weddingData?.fecha);
-  const guestPercentage = stats.totalGuests > 0 ? (stats.confirmedGuests / stats.totalGuests) * 100 : 0;
-  const budgetPercentage = stats.totalBudget > 0 ? (stats.totalPaid / stats.totalBudget) * 100 : 0;
+  const currentWeek = getWeekNumber(new Date());
+  const weeklyTip = weddingTips[currentWeek % weddingTips.length];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 md:space-y-10 animate-fade-in pb-24 md:pb-20">
 
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-end">
+      {/* HEADER - Compact on Mobile */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-gray-100 pb-4 md:pb-8">
         <div>
-          <h1 className="text-3xl font-serif text-boda-text">
-            {weddingData?.novios ? weddingData.novios.join(' & ') : 'Vuestra Boda'}
+          <p className="text-gray-400 uppercase tracking-[0.2em] text-[10px] font-bold mb-1 md:mb-4">Panel de Control</p>
+          <h1 className="text-3xl md:text-6xl font-display text-[#333] leading-tight flex items-center gap-2">
+            {weddingData?.novios ? `${weddingData.novios[0]} & ${weddingData.novios[1]}` : 'Tu Boda'}
           </h1>
-          <p className="text-gray-400 text-sm mt-1 font-medium tracking-wide">
-            {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+          <p className="text-gray-400 text-[10px] md:text-xs mt-2 md:mt-4 font-body font-medium tracking-widest uppercase">
+            {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        <Link href="/dashboard/configuracion-invitacion" className="mt-4 md:mt-0 text-xs font-bold text-boda-text border-b border-boda-text pb-0.5 hover:opacity-70 transition">
-          VER INVITACIÓN →
-        </Link>
       </div>
 
-      {/* COMPACT BENTO GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* MOBILE-FIRST GRID: 2 Columns on Mobile, 4 on Desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
 
-        {/* 1. HERO BANNER - COUNTDOWN (Span 2 cols, 1 row) */}
-        <div className="lg:col-span-2 bg-boda-text text-white rounded-[2rem] p-6 md:p-8 flex flex-row items-center justify-between relative overflow-hidden shadow-xl shadow-gray-200 group h-full min-h-[180px]">
-          {/* Background Deco */}
-          <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 transition-transform duration-700 group-hover:scale-125"></div>
+        {/* 1. COUNTDOWN STRIP (Col-span-2) */}
+        <div className="col-span-2 bg-[#333] text-white rounded-[1.5rem] p-6 md:p-10 flex items-center justify-between relative overflow-hidden shadow-lg">
+          <div className="absolute right-0 top-0 w-32 h-32 bg-gradient-to-br from-white/10 to-transparent blur-2xl rounded-full transform translate-x-10 -translate-y-10"></div>
 
-          <div className="relative z-10 flex-1">
-            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-gray-400 mb-2 block">Cuenta Atrás</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-6xl md:text-7xl font-serif leading-none tracking-tighter">
-                {daysLeft}
-              </span>
-              <span className="text-xl font-script opacity-80">Días</span>
+          <div>
+            <p className="text-[9px] md:text-xs font-bold tracking-[0.3em] uppercase text-gray-400 mb-1">Quedan</p>
+            <div className="flex items-baseline gap-1">
+              <span className="text-4xl md:text-6xl font-light text-white leading-none">{daysLeft}</span>
+              <span className="text-xs font-bold uppercase tracking-widest text-[#B88E2F]">Días</span>
             </div>
-            <p className="text-xs text-gray-500 mt-2 font-medium">
-              {daysLeft === 0 ? '¡Hoy es el gran día!' : `Hasta el ${weddingData?.fecha || '...'}`}
-            </p>
           </div>
 
-          <div className="relative z-10 hidden sm:flex flex-col items-end justify-center pl-6 border-l border-white/10 h-12">
-            <span className="text-3xl">💍</span>
+          <div className="hidden sm:block text-right">
+            <IconDiamond className="w-8 h-8 text-[#B88E2F] opacity-50 ml-auto mb-2" />
+            <p className="font-serif italic text-lg">{new Date(weddingData?.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
           </div>
         </div>
 
-        {/* 2. GUESTS STAT */}
-        <Link href="/dashboard/invitados" className="bg-white rounded-[2rem] p-6 border border-gray-100 hover:border-gray-300 hover:shadow-lg transition-all group flex flex-col justify-between h-full min-h-[180px]">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-gray-50 rounded-xl group-hover:bg-gray-100 transition">
-              <span className="text-2xl">✉️</span>
-            </div>
-            <span className="bg-gray-50 text-gray-600 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide">
-              {guestPercentage.toFixed(0)}% Asistencia
-            </span>
+        {/* 2. STATS (Side by Side on Mobile) */}
+        <Link href="/dashboard/invitados" className="col-span-1 bg-white p-5 md:p-8 rounded-[1.5rem] border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between aspect-[4/3] md:aspect-auto group">
+          <div className="flex justify-between items-start mb-2">
+            <IconEnvelope className="w-6 h-6 text-gray-400 group-hover:text-[#333] transition-colors" />
+            <span className="text-[10px] font-bold bg-gray-50 px-2 py-0.5 rounded-full text-gray-500">{stats.confirmedGuests} OK</span>
           </div>
           <div>
-            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-1">Total Invitados</p>
-            <h3 className="text-3xl font-serif text-boda-text">{stats.totalGuests}</h3>
-            <p className="text-xs text-boda-text-light mt-1"><strong className="text-boda-text">{stats.confirmedGuests}</strong> confirmados</p>
+            <h3 className="text-2xl md:text-3xl font-bold text-[#333]">{stats.totalGuests}</h3>
+            <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-gray-400">Invitados</p>
           </div>
         </Link>
 
-        {/* 3. BUDGET STAT */}
-        <Link href="/dashboard/presupuesto" className="bg-white rounded-[2rem] p-6 border border-gray-100 hover:border-gray-300 hover:shadow-lg transition-all group flex flex-col justify-between h-full min-h-[180px]">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-gray-50 rounded-xl group-hover:bg-gray-100 transition">
-              <span className="text-2xl">💰</span>
-            </div>
-            <span className="bg-gray-50 text-gray-600 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide">
-              {budgetPercentage.toFixed(0)}% Pagado
-            </span>
+        <Link href="/dashboard/presupuesto" className="col-span-1 bg-white p-5 md:p-8 rounded-[1.5rem] border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between aspect-[4/3] md:aspect-auto group">
+          <div className="flex justify-between items-start mb-2">
+            <IconWallet className="w-6 h-6 text-gray-400 group-hover:text-[#333] transition-colors" />
           </div>
           <div>
-            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-1">Presupuesto</p>
-            <h3 className="text-3xl font-serif text-boda-text">{stats.totalPaid.toLocaleString()}€</h3>
-            <div className="w-full bg-gray-100 h-1 mt-3 rounded-full overflow-hidden">
-              <div className="bg-boda-text h-full transition-all duration-1000" style={{ width: `${budgetPercentage}%` }}></div>
-            </div>
+            <h3 className="text-xl md:text-3xl font-serif text-[#333] truncate">{stats.totalPaid.toLocaleString()}€</h3>
+            <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-gray-400">Pagado</p>
           </div>
         </Link>
 
-        {/* 4. ACTIONS ROW (Span 2) */}
-        <div className="lg:col-span-2 bg-white rounded-[2rem] p-6 border border-gray-100 flex flex-col justify-center">
-          <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Acciones Rápidas</h4>
-          <div className="grid grid-cols-3 gap-3">
-            <button onClick={() => router.push('/dashboard/invitados')} className="p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition text-center group">
-              <span className="block text-xl mb-1 group-hover:-translate-y-0.5 transition-transform">👯‍♀️</span>
-              <span className="text-xs font-bold text-boda-text">Invitados</span>
-            </button>
-            <button onClick={() => router.push('/dashboard/mesas')} className="p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition text-center group">
-              <span className="block text-xl mb-1 group-hover:-translate-y-0.5 transition-transform">🍽️</span>
-              <span className="text-xs font-bold text-boda-text">Mesas</span>
-            </button>
-            <button onClick={() => router.push('/dashboard/presupuesto')} className="p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition text-center group">
-              <span className="block text-xl mb-1 group-hover:-translate-y-0.5 transition-transform">💶</span>
-              <span className="text-xs font-bold text-boda-text">Pagos</span>
-            </button>
+        {/* 3. QUICK ACTIONS (Col-span-2) */}
+        <div className="col-span-2 bg-[#F8F8F8] p-4 md:p-8 rounded-[1.5rem] border border-gray-100">
+          <div className="flex justify-between items-center mb-4 px-2">
+            <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Accesos Rápidos</h4>
+          </div>
+          <div className="grid grid-cols-3 md:grid-cols-3 gap-3">
+            <QuickAction icon={<IconUsers className="w-6 h-6" />} label="Lista" onClick={() => router.push('/dashboard/invitados')} />
+            <QuickAction icon={<IconTable className="w-6 h-6" />} label="Mesas" onClick={() => router.push('/dashboard/mesas')} />
+            <QuickAction icon={<IconBrush className="w-6 h-6" />} label="Diseño" onClick={() => router.push('/dashboard/configuracion-invitacion')} />
           </div>
         </div>
 
-        {/* 5. TIP OF THE DAY (Span 2) */}
-        <div className="lg:col-span-2 bg-gray-50 rounded-[2rem] p-6 border border-dashed border-gray-200 flex items-center gap-5 justify-between">
-          <div className="flex items-center gap-5">
-            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm flex-shrink-0">
-              💡
-            </div>
-            <div>
-              <h4 className="font-bold text-boda-text text-sm mb-0.5">Consejo Semanal</h4>
-              <p className="text-xs text-gray-500 leading-relaxed max-w-sm">
-                "Revisa las alergias alimentarias. Es un detalle que tus invitados agradecerán."
-              </p>
-            </div>
+        {/* 4. TIP BANNER (Col-span-2) */}
+        <div className="col-span-2 rounded-[1.5rem] bg-white border border-gray-200 p-5 md:p-8 flex items-start gap-4 shadow-sm">
+          <div className="w-8 h-8 rounded-full bg-[#B88E2F]/10 text-[#B88E2F] flex items-center justify-center font-serif italic text-lg shrink-0">i</div>
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">Tip de la semana {currentWeek}</p>
+            <p className="font-serif italic text-gray-600 text-sm md:text-lg leading-relaxed">"{weeklyTip}"</p>
           </div>
-          <button className="text-gray-300 hover:text-boda-text transition">✕</button>
         </div>
 
       </div>
-
     </div>
+  );
+}
+
+function QuickAction({ icon, label, onClick }) {
+  return (
+    <button onClick={onClick} className="bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-[#333] hover:shadow-md transition-all flex flex-col items-center justify-center gap-3 group h-full">
+      <span className="text-gray-400 group-hover:text-[#333] group-hover:scale-110 transition-all duration-500">{icon}</span>
+      <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-gray-400 group-hover:text-[#333] transition-colors">{label}</span>
+    </button>
   );
 }
