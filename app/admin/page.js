@@ -5,11 +5,18 @@ import { collection, query, onSnapshot, orderBy, doc, getDoc, updateDoc, addDoc,
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { deleteWedding } from '../actions';
+import Button from '../../components/ui/Button';
+import { useAuth } from '../../context/AuthContext';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const { user, userData, loading: authLoading } = useAuth();
+  const isAuthorized = user && userData?.role === 'admin';
+
+  // Local loading for actions (like creating/deleting), NOT for auth
+  const [actionLoading, setActionLoading] = useState(false);
+
   const [bodas, setBodas] = useState([]);
   const [solicitudes, setSolicitudes] = useState([]);
   const [users, setUsers] = useState([]);
@@ -22,14 +29,14 @@ export default function AdminDashboard() {
 
   const handleCreateWedding = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setActionLoading(true);
     try {
       // 1. Create Wedding
       const weddingRef = await addDoc(collection(db, 'weddings'), {
         novios: [newWeddingData.novio1, newWeddingData.novio2],
         fecha: newWeddingData.fecha,
         creadoEn: new Date().toISOString(),
-        adminId: auth.currentUser.uid, // Created by admin
+        adminId: user.uid, // Created by admin
         invitationConfig: {
           location: { enabled: false },
           bank: { enabled: false },
@@ -38,7 +45,7 @@ export default function AdminDashboard() {
       });
 
       // 2. CRITICAL: Link this wedding to the Admin User ID so they "own" it for testing
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+      await updateDoc(doc(db, 'users', user.uid), {
         weddingId: weddingRef.id
       });
 
@@ -46,56 +53,55 @@ export default function AdminDashboard() {
       setShowCreateModal(false);
       setNewWeddingData({ novio1: '', novio2: '', fecha: '' });
 
+      // Force reload or let listener update? Listener should update userData in context if we were listening to it...
+      // but Context usually listens to Auth object which doesn't change on doc update. 
+      // Ideally AuthContext should listen to the user doc. 
+      // For now, let's rely on the fact that if we navigate it updates, or page refresh.
+
     } catch (error) {
       console.error(error);
       alert("❌ Error al crear boda: " + error.message);
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
   useEffect(() => {
-    const checkAdmin = async () => {
-      auth.onAuthStateChanged(async (user) => {
-        if (!user) { router.push('/login'); return; }
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists() && userDoc.data().role === 'admin') {
-          setIsAuthorized(true);
-        } else {
-          router.push('/dashboard');
-        }
-      });
-    };
-    checkAdmin();
-  }, [router]);
+    // 1. Secure Route
+    if (!authLoading) {
+      if (!user) {
+        router.push('/login');
+      } else if (userData?.role !== 'admin') {
+        router.push('/dashboard');
+      }
+    }
+  }, [user, userData, authLoading, router]);
 
   useEffect(() => {
-    if (!isAuthorized) return;
+    // 2. Load Admin Data only if authorized
+    if (user && userData?.role === 'admin') {
+      const qBodas = query(collection(db, "weddings"), orderBy("creadoEn", "desc"));
+      const unsubBodas = onSnapshot(qBodas, (snapshot) => {
+        setBodas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
 
-    // 1. Bodas Activas
-    const qBodas = query(collection(db, "weddings"), orderBy("creadoEn", "desc"));
-    const unsubBodas = onSnapshot(qBodas, (snapshot) => {
-      setBodas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+      const qSolicitudes = query(collection(db, "wedding_requests"), where("status", "==", "pending"));
+      const unsubSolicitudes = onSnapshot(qSolicitudes, (snapshot) => {
+        setSolicitudes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
 
-    // 2. Solicitudes Pendientes
-    const qSolicitudes = query(collection(db, "wedding_requests"), where("status", "==", "pending"));
-    const unsubSolicitudes = onSnapshot(qSolicitudes, (snapshot) => {
-      setSolicitudes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+      const qUsers = query(collection(db, "users"));
+      const unsubUsers = onSnapshot(qUsers, (snapshot) => {
+        setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
 
-    // 3. Usuarios (Lista Completa)
-    const qUsers = query(collection(db, "users"));
-    const unsubUsers = onSnapshot(qUsers, (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-
-    return () => {
-      unsubBodas();
-      unsubSolicitudes();
-      unsubUsers();
-    };
-  }, [isAuthorized]);
+      return () => {
+        unsubBodas();
+        unsubSolicitudes();
+        unsubUsers();
+      };
+    }
+  }, [user, userData]); // Re-run when user/role is confirmed
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -106,46 +112,26 @@ export default function AdminDashboard() {
     const confirmacion = confirm(`⚠️ PELIGRO:\n¿Estás seguro de que quieres BORRAR la boda de ${nombreBoda}?\nEsta acción eliminará permanentemente:\n- Lista de invitados\n- Confirmaciones\n- Mesas\n- Gastos\n- Usuario asociado`);
     if (!confirmacion) return;
 
-    setLoading(true);
+    setActionLoading(true);
 
     try {
-      const batch = writeBatch(db);
+      // Get ID Token for Security
+      const token = await user.getIdToken();
 
-      // 1. Borrar subcolecciones (Guests, Tables, Expenses)
-      const subCollections = ['guests', 'tables', 'expenses'];
-      for (const subCol of subCollections) {
-        const subSnapshot = await getDocs(collection(db, 'weddings', weddingId, subCol));
-        subSnapshot.forEach((doc) => {
-          batch.delete(doc.ref);
-        });
+      // Call Server Action
+      const result = await deleteWedding(token, weddingId);
+
+      if (result.success) {
+        alert("✅ " + result.message);
+      } else {
+        throw new Error(result.message);
       }
-
-      // 2. Borrar documento de la boda
-      batch.delete(doc(db, 'weddings', weddingId));
-
-      // 3. Borrar/Desvincular usuario
-      let userId = adminId;
-      if (!userId) {
-        // Intentar buscar el usuario por weddingId
-        const qUser = query(collection(db, 'users'), where('weddingId', '==', weddingId));
-        const userSnap = await getDocs(qUser);
-        if (!userSnap.empty) {
-          userId = userSnap.docs[0].id;
-        }
-      }
-
-      if (userId) {
-        batch.delete(doc(db, 'users', userId));
-      }
-
-      await batch.commit();
-      alert("✅ Boda y datos eliminados correctamente.");
 
     } catch (error) {
       console.error(error);
       alert("❌ Error al eliminar: " + error.message);
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -251,19 +237,21 @@ export default function AdminDashboard() {
               const currentUserData = users.find(u => u.id === auth.currentUser?.uid);
               const adminHasWedding = currentUserData?.weddingId;
               return adminHasWedding ? (
-                <Link
+                <Button
                   href="/dashboard"
-                  className="bg-indigo-600 text-white font-bold text-sm px-4 py-2 rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 flex items-center gap-2"
+                  variant="primary"
+                  className="shadow-lg shadow-boda-green/20"
                 >
                   👁️ Ver mi Boda de Prueba
-                </Link>
+                </Button>
               ) : (
-                <button
+                <Button
                   onClick={() => setShowCreateModal(true)}
-                  className="bg-gray-900 text-white font-bold text-sm px-4 py-2 rounded-xl hover:bg-black transition shadow-lg shadow-gray-200"
+                  variant="secondary"
+                  className="shadow-lg shadow-boda-pink/20"
                 >
                   + Crear Boda de Prueba
-                </button>
+                </Button>
               );
             })()}
 
@@ -322,7 +310,7 @@ export default function AdminDashboard() {
                     disabled={loading}
                     className="px-6 py-2 bg-gray-900 text-white font-bold rounded-lg hover:bg-black transition shadow-md"
                   >
-                    {loading ? 'Creando...' : 'Crear Boda'}
+                    {actionLoading ? 'Creando...' : 'Crear Boda'}
                   </button>
                 </div>
               </form>
@@ -379,7 +367,7 @@ export default function AdminDashboard() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleApprove(req)}
-                        disabled={loading}
+                        disabled={actionLoading}
                         className="flex-1 bg-gray-900 text-white py-2 rounded-lg text-xs font-bold hover:bg-black transition"
                       >
                         Aprobar
@@ -432,10 +420,10 @@ export default function AdminDashboard() {
                         </Link>
                         <button
                           onClick={() => handleDeleteWedding(boda.id, boda.adminId, boda.novios?.join(' y '))}
-                          disabled={loading}
+                          disabled={actionLoading}
                           className="px-4 py-2 bg-red-50 text-red-500 rounded-xl text-xs font-bold hover:bg-red-100 transition disabled:opacity-50"
                         >
-                          {loading ? '...' : '🗑️ Borrar'}
+                          {actionLoading ? '...' : '🗑️ Borrar'}
                         </button>
                       </td>
                     </tr>

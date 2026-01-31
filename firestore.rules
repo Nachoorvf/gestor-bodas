@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // USERS
+    match /users/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow write: if isSignedIn() && (isOwner(userId) || isAdmin());
+    }
+
+    // WEDDINGS
+    match /weddings/{weddingId} {
+      // Create: Allow admins (for test weddings)
+      allow create: if isSignedIn() && isAdmin();
+      
+      // Read/Update: Allow Admins OR the couple that owns it
+      allow read, update: if isSignedIn() && (
+        isAdmin() || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.weddingId == weddingId
+      );
+      
+      // Delete: ONLY Admin (Already handled via Server Action, but good to block client-side delete explicitly except for admin)
+      // Actually, my server action uses firebase-admin which bypasses rules. 
+      // Client-side delete was removed from UI, so we can disallow delete here to be safe, 
+      // or allow it only for admins just in case legacy code runs.
+      allow delete: if false; // Strict: Deletes must go through Server Action (firebase-admin)
+
+      // Subcollections (guests, tables, expenses)
+      match /{document=**} {
+        allow read, write: if isSignedIn() && (
+          isAdmin() || 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.weddingId == weddingId
+        );
+      }
+    }
+
+    // WEDDING REQUESTS
+    match /wedding_requests/{requestId} {
+      // Create: Allow any signed-in user (who wants a wedding)
+      allow create: if isSignedIn();
+      
+      // Read/Update/Delete: Only Admin
+      allow read, update, delete: if isSignedIn() && isAdmin();
+      
+      // Allow user to read THEIR OWN request (to show status? Maybe needed later, for now Admin only is safer unless UI needs it)
+      // The Request page checks for pending requests via: where('userId', '==', currentUser.uid)
+      // So we MUST allow users to read requests where userId == auth.uid
+      allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+    }
+  }
+}

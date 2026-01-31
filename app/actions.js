@@ -2,51 +2,23 @@
 
 import { authAdmin, dbAdmin } from '../firebase/admin';
 
-export async function createNewWedding(data) {
-  const DOMINIO = '@boda.com';
-  const emailCompleto = data.usuario + DOMINIO;
+// createNewWedding Removed (Unused/Legacy)// ... (Mantén los imports y la función createNewWedding que ya tenías)
 
+export async function deleteWedding(token, weddingId) {
   try {
-    // 1. Crear el usuario en Firebase Authentication (El Portero)
-    const userRecord = await authAdmin.createUser({
-      email: emailCompleto,
-      password: data.password,
-      displayName: `${data.nombre1} & ${data.nombre2}`
-    });
+    // 0. SECURITY CHECK 🛡️
+    if (!token) throw new Error("No autenticado");
 
-    const uid = userRecord.uid; // El ID único que Firebase le ha dado
+    // Verify ID Token
+    const decodedToken = await authAdmin.verifyIdToken(token);
+    const adminUid = decodedToken.uid;
 
-    // 2. Crear la boda en la base de datos (Colección 'weddings')
-    // Creamos un ID bonito para la boda (ej: juan-y-maria)
-    const weddingId = data.usuario; 
-    
-    await dbAdmin.collection('weddings').doc(weddingId).set({
-      novios: [data.nombre1, data.nombre2],
-      fecha: data.fecha,
-      creadoEn: new Date().toISOString(),
-      invitados: [] // Lista vacía por ahora
-    });
+    // Check if user is actually an admin in Firestore
+    const adminDoc = await dbAdmin.collection('users').doc(adminUid).get();
+    if (!adminDoc.exists || adminDoc.data().role !== 'admin') {
+      throw new Error("No autorizado: Requiere permisos de Administrador");
+    }
 
-    // 3. Crear el perfil del usuario (Colección 'users')
-    // Aquí es donde le decimos que NO es admin, sino 'couple' (novios)
-    await dbAdmin.collection('users').doc(uid).set({
-      role: 'couple',     // ROL CLAVE
-      weddingId: weddingId, // Vinculamos al usuario con SU boda
-      email: emailCompleto
-    });
-
-    // Si todo va bien, devolvemos éxito
-    return { success: true, message: `Boda de ${data.nombre1} y ${data.nombre2} creada correctamente.` };
-
-  } catch (error) {
-    console.error("Error creando boda:", error);
-    // Devolvemos el error para mostrarlo en pantalla
-    return { success: false, message: error.message };
-  }
-}// ... (Mantén los imports y la función createNewWedding que ya tenías)
-
-export async function deleteWedding(weddingId) {
-  try {
     // 1. LIMPIEZA DE USUARIO (Dueño de la boda)
     const usersSnapshot = await dbAdmin.collection('users')
       .where('weddingId', '==', weddingId)
@@ -67,11 +39,11 @@ export async function deleteWedding(weddingId) {
 
     // Usamos un "batch" (lote) para borrar muchos de golpe, es más eficiente
     const batch = dbAdmin.batch();
-    
+
     guestsSnapshot.docs.forEach((doc) => {
       batch.delete(doc.ref);
     });
-    
+
     // Ejecutamos el borrado masivo de invitados
     await batch.commit();
 

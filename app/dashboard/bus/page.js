@@ -1,13 +1,19 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { auth, db } from '../../../firebase/config';
+import { db } from '../../../firebase/config';
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../../../context/AuthContext';
+import DashboardSkeleton from '../../../components/loaders/DashboardSkeleton';
 
 export default function BusPage() {
     const router = useRouter();
-    const [loading, setLoading] = useState(true);
-    const [weddingId, setWeddingId] = useState(null);
+    const { user, userData, loading: authLoading } = useAuth();
+    const weddingId = userData?.weddingId;
+
+    // Manage local loading for data fetching (since context only handles auth loading)
+    const [dataLoading, setDataLoading] = useState(true);
+
     const [activeTab, setActiveTab] = useState('config'); // config | passengers
 
     // BUS CONFIG STATE
@@ -23,31 +29,37 @@ export default function BusPage() {
     // PASSENGERS STATE
     const [passengers, setPassengers] = useState([]);
 
+    // 1. Auth Check
     useEffect(() => {
-        auth.onAuthStateChanged(async (user) => {
-            if (!user) { router.push('/login'); return; }
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            if (userDoc.exists()) {
-                const wId = userDoc.data().weddingId;
-                setWeddingId(wId);
+        if (!authLoading && !user) {
+            router.push('/login');
+        }
+    }, [user, authLoading, router]);
 
-                // Fetch Bus Config
-                const wDoc = await getDoc(doc(db, 'weddings', wId));
-                if (wDoc.exists() && wDoc.data().busConfig) {
-                    setBusConfig(wDoc.data().busConfig);
-                }
+    // 2. Fetch Data
+    useEffect(() => {
+        if (!weddingId) return;
 
-                // Fetch Passengers Real-time
-                const q = query(collection(db, 'weddings', wId, 'guests'), where('bus', '==', true));
-                const unsub = onSnapshot(q, (snap) => {
-                    const guests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    setPassengers(guests);
-                });
-                setLoading(false);
-                return () => unsub();
+        const fetchData = async () => {
+            // Fetch Bus Config
+            const wDoc = await getDoc(doc(db, 'weddings', weddingId));
+            if (wDoc.exists() && wDoc.data().busConfig) {
+                setBusConfig(wDoc.data().busConfig);
             }
-        });
-    }, [router]);
+
+            // Fetch Passengers Real-time
+            const q = query(collection(db, 'weddings', weddingId, 'guests'), where('bus', '==', true));
+            const unsub = onSnapshot(q, (snap) => {
+                const guests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                setPassengers(guests);
+            });
+
+            setDataLoading(false);
+            return () => unsub();
+        };
+
+        fetchData();
+    }, [weddingId]);
 
     const handleSave = async () => {
         try {
@@ -71,7 +83,7 @@ export default function BusPage() {
         setBusConfig(prev => ({ ...prev, routes: newRoutes }));
     };
 
-    if (loading) return <div className="p-8 text-center text-gray-500">Cargando gestión de autobuses...</div>;
+    if (authLoading || dataLoading) return <DashboardSkeleton />;
 
     return (
         <div className="max-w-4xl mx-auto h-[calc(100vh-100px)] flex flex-col">
@@ -80,8 +92,8 @@ export default function BusPage() {
 
             {/* MASTER TOGGLE CARD */}
             <div className={`p-6 rounded-2xl border transition-all duration-500 mb-8 flex items-center justify-between ${busConfig.enabled
-                    ? 'bg-purple-50 border-purple-200 shadow-md'
-                    : 'bg-white border-gray-200 grayscale opacity-80'
+                ? 'bg-purple-50 border-purple-200 shadow-md'
+                : 'bg-white border-gray-200 grayscale opacity-80'
                 }`}>
                 <div>
                     <h2 className="font-bold text-xl text-boda-text">Servicio de Autobús</h2>

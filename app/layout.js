@@ -1,15 +1,15 @@
-import { Great_Vibes, Montserrat } from 'next/font/google';
+import { Playfair_Display, Inter } from 'next/font/google';
 import "./globals.css";
+import { AuthProvider } from '../context/AuthContext';
 
-// 1. Configuramos la fuente manuscrita (para títulos)
-const greatVibes = Great_Vibes({ 
+// 1. Configuramos la fuente Serif elegante (para títulos)
+const playfair = Playfair_Display({
   subsets: ['latin'],
-  weight: ['400'],
-  variable: '--font-script', // Esta variable la usaremos en Tailwind
+  variable: '--font-script', // Keeping the same variable name for easy mapping, or I can change to --font-serif
 });
 
-// 2. Configuramos la fuente moderna (para textos)
-const montserrat = Montserrat({ 
+// 2. Configuramos la fuente Sans limpia (para textos)
+const inter = Inter({
   subsets: ['latin'],
   variable: '--font-body',
 });
@@ -22,8 +22,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="es">
-      <body className={`${greatVibes.variable} ${montserrat.variable} font-body bg-boda-bg text-boda-text antialiased`}>
-        {children}
+      <body className={`${playfair.variable} ${inter.variable} font-body bg-boda-bg text-boda-text antialiased`}>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

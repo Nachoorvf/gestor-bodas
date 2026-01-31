@@ -1,14 +1,16 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { auth, db } from '../../firebase/config';
-import { doc, getDoc, collection, getDocs, query } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import Card from '../../components/ui/Card';
 import Link from 'next/link';
+import { useAuth } from '../../context/AuthContext';
+import DashboardSkeleton from '../../components/loaders/DashboardSkeleton';
 
 export default function DashboardOverview() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const { user, userData, loading: authLoading } = useAuth();
   const [weddingData, setWeddingData] = useState(null);
   const [stats, setStats] = useState({
     totalGuests: 0,
@@ -18,45 +20,46 @@ export default function DashboardOverview() {
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      auth.onAuthStateChanged(async (user) => {
-        if (!user) { router.push('/login'); return; }
+    // 1. Auth Check (Redirect if not logged in)
+    if (!authLoading && !user) {
+      router.push('/login');
+      return;
+    }
 
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const weddingId = userDoc.data().weddingId;
-          if (!weddingId) return;
+    // 2. Fetch Wedding Data if User has Wedding
+    const fetchWeddingDetails = async () => {
+      if (userData?.weddingId) {
+        const weddingDoc = await getDoc(doc(db, 'weddings', userData.weddingId));
+        if (weddingDoc.exists()) {
+          setWeddingData(weddingDoc.data());
 
-          const weddingDoc = await getDoc(doc(db, 'weddings', weddingId));
-          if (weddingDoc.exists()) {
-            setWeddingData(weddingDoc.data());
+          // Get Subcollection Stats
+          const weddingId = userData.weddingId;
+          const [guestsSnap, expensesSnap] = await Promise.all([
+            getDocs(collection(db, 'weddings', weddingId, 'guests')),
+            getDocs(collection(db, 'weddings', weddingId, 'expenses'))
+          ]);
 
-            // 1. Get Guests Stats
-            const qGuests = query(collection(db, 'weddings', weddingId, 'guests'));
-            const guestsSnap = await getDocs(qGuests);
-            const guests = guestsSnap.docs.map(d => d.data());
+          const guests = guestsSnap.docs.map(d => d.data());
+          const expenses = expensesSnap.docs.map(d => d.data());
 
-            // 2. Get Budget Stats
-            const qExpenses = query(collection(db, 'weddings', weddingId, 'expenses'));
-            const expensesSnap = await getDocs(qExpenses);
-            const expenses = expensesSnap.docs.map(d => d.data());
+          const calculatedBudget = expenses.reduce((acc, curr) => acc + Number(curr.estimated || 0), 0);
+          const calculatedPaid = expenses.reduce((acc, curr) => acc + Number(curr.paid || 0), 0);
 
-            const calculatedBudget = expenses.reduce((acc, curr) => acc + Number(curr.estimated || 0), 0);
-            const calculatedPaid = expenses.reduce((acc, curr) => acc + Number(curr.paid || 0), 0);
-
-            setStats({
-              totalGuests: guests.length,
-              confirmedGuests: guests.filter(g => g.confirmado === true).length,
-              totalBudget: calculatedBudget,
-              totalPaid: calculatedPaid
-            });
-          }
+          setStats({
+            totalGuests: guests.length,
+            confirmedGuests: guests.filter(g => g.confirmado === true).length,
+            totalBudget: calculatedBudget,
+            totalPaid: calculatedPaid
+          });
         }
-        setLoading(false);
-      });
+      }
     };
-    fetchData();
-  }, [router]);
+
+    if (!authLoading && user) {
+      fetchWeddingDetails();
+    }
+  }, [user, userData, authLoading, router]);
 
   const calculateDaysLeft = (dateString) => {
     if (!dateString) return 0;
@@ -67,142 +70,129 @@ export default function DashboardOverview() {
     return diffDays > 0 ? diffDays : 0;
   };
 
-  if (loading) return <div className="p-8 text-center text-boda-text-light">Cargando...</div>;
+  if (authLoading) return <DashboardSkeleton />;
 
   const daysLeft = calculateDaysLeft(weddingData?.fecha);
   const guestPercentage = stats.totalGuests > 0 ? (stats.confirmedGuests / stats.totalGuests) * 100 : 0;
   const budgetPercentage = stats.totalBudget > 0 ? (stats.totalPaid / stats.totalBudget) * 100 : 0;
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-4xl font-serif text-boda-text mb-2">
-          Hola, {weddingData?.novios ? weddingData.novios.join(' y ') : 'Novios'}
-        </h1>
-        <p className="text-boda-text-light">Aquí tienes el resumen actualizado de tu boda.</p>
-      </div>
+    <div className="space-y-6 animate-fade-in">
 
-      {/* COUNTDOWN HERO */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-boda-green to-boda-green-dark text-white shadow-xl shadow-boda-green/20 mb-8 p-8 md:p-12">
-        {/* Decorative Background Elements */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/5 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
-
-        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end justify-between gap-8 text-center md:text-left">
-
-          <div className="flex flex-col items-center md:items-start">
-            <div className="flex items-center gap-3 mb-2 opacity-90">
-              <span className="text-xs uppercase tracking-[0.2em] font-bold">Faltan</span>
-              <div className="h-px w-8 bg-white/50"></div>
-            </div>
-
-            <div className="flex items-baseline gap-2 leading-none">
-              <span className="text-7xl md:text-9xl font-bold tracking-tighter shadow-sm">{daysLeft}</span>
-              <span className="font-script text-5xl md:text-7xl opacity-90">Días</span>
-            </div>
-
-            <p className="mt-4 text-white/90 font-medium tracking-wide">
-              Para el gran día <span className="opacity-75 mx-2">|</span> {weddingData?.fecha}
-            </p>
-          </div>
-
-          {/* Status Badge */}
-          <div className="flex flex-col items-center gap-3 bg-white/15 backdrop-blur-md border border-white/20 p-4 pr-6 rounded-full shadow-lg transform transition-transform hover:scale-105">
-            <div className="flex items-center gap-3">
-              <div className="bg-white text-red-500 rounded-full p-2 shadow-inner">
-                <span className="text-xl">❤️</span>
-              </div>
-              <div className="text-left">
-                <p className="text-xs text-white/80 font-bold uppercase tracking-wider">Estado</p>
-                <p className="text-lg font-bold">Todo listo</p>
-              </div>
-            </div>
-          </div>
-
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-end">
+        <div>
+          <h1 className="text-3xl font-serif text-boda-text">
+            {weddingData?.novios ? weddingData.novios.join(' & ') : 'Vuestra Boda'}
+          </h1>
+          <p className="text-gray-400 text-sm mt-1 font-medium tracking-wide">
+            {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
         </div>
+        <Link href="/dashboard/configuracion-invitacion" className="mt-4 md:mt-0 text-xs font-bold text-boda-text border-b border-boda-text pb-0.5 hover:opacity-70 transition">
+          VER INVITACIÓN →
+        </Link>
       </div>
 
-      {/* QUICK STATS GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      {/* COMPACT BENTO GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
-        {/* INVITED CARD */}
-        <Card className="flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-purple-50 rounded-xl text-purple-500 text-xl">✉️</div>
-              <span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">{guestPercentage.toFixed(0)}% Asistencia</span>
-            </div>
-            <p className="text-boda-text-light text-sm font-medium">Total Invitados</p>
-            <h3 className="text-3xl font-bold text-boda-text mt-1">{stats.totalGuests}</h3>
-          </div>
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex justify-between text-xs text-boda-text-light mb-1">
-              <span>Confirmados</span>
-              <span className="font-bold text-purple-500">{stats.confirmedGuests}</span>
-            </div>
-            <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
-              <div className="bg-purple-400 h-2 rounded-full transition-all duration-1000" style={{ width: `${guestPercentage}%` }}></div>
-            </div>
-            <Link href="/dashboard/invitados" className="text-xs font-bold text-purple-500 hover:text-purple-700 block text-right">Gestionar →</Link>
-          </div>
-        </Card>
+        {/* 1. HERO BANNER - COUNTDOWN (Span 2 cols, 1 row) */}
+        <div className="lg:col-span-2 bg-boda-text text-white rounded-[2rem] p-6 md:p-8 flex flex-row items-center justify-between relative overflow-hidden shadow-xl shadow-gray-200 group h-full min-h-[180px]">
+          {/* Background Deco */}
+          <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 transition-transform duration-700 group-hover:scale-125"></div>
 
-        {/* BUDGET CARD */}
-        <Card className="flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-pink-50 rounded-xl text-pink-500 text-xl">💰</div>
+          <div className="relative z-10 flex-1">
+            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-gray-400 mb-2 block">Cuenta Atrás</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-6xl md:text-7xl font-serif leading-none tracking-tighter">
+                {daysLeft}
+              </span>
+              <span className="text-xl font-script opacity-80">Días</span>
             </div>
-            <p className="text-boda-text-light text-sm font-medium">Pagado vs Presupuesto</p>
-            <h3 className="text-3xl font-bold text-boda-text mt-1">
-              {stats.totalPaid.toLocaleString()}€
-              <span className="text-base text-gray-300 font-normal"> / {stats.totalBudget.toLocaleString()}€</span>
-            </h3>
-          </div>
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex justify-between text-xs text-boda-text-light mb-1">
-              <span>Progreso Pagos</span>
-              <span className="font-bold text-pink-500">{budgetPercentage.toFixed(0)}%</span>
-            </div>
-            <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
-              <div className="bg-pink-400 h-2 rounded-full transition-all duration-1000" style={{ width: `${budgetPercentage}%` }}></div>
-            </div>
-            <Link href="/dashboard/presupuesto" className="text-xs font-bold text-pink-500 hover:text-pink-700 block text-right">Ver Detalles →</Link>
-          </div>
-        </Card>
-
-        {/* TIP CARD */}
-        <Card className="flex flex-col justify-between bg-gradient-to-br from-boda-bg to-white">
-          <div>
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-blue-50 rounded-xl text-blue-500 text-xl">💡</div>
-            </div>
-            <h3 className="text-lg font-bold text-boda-text mb-2">Consejo del día</h3>
-            <p className="text-xs text-boda-text-light leading-relaxed">
-              "Recuerda confirmar el menú de niños con el catering al menos 2 semanas antes."
+            <p className="text-xs text-gray-500 mt-2 font-medium">
+              {daysLeft === 0 ? '¡Hoy es el gran día!' : `Hasta el ${weddingData?.fecha || '...'}`}
             </p>
           </div>
-        </Card>
+
+          <div className="relative z-10 hidden sm:flex flex-col items-end justify-center pl-6 border-l border-white/10 h-12">
+            <span className="text-3xl">💍</span>
+          </div>
+        </div>
+
+        {/* 2. GUESTS STAT */}
+        <Link href="/dashboard/invitados" className="bg-white rounded-[2rem] p-6 border border-gray-100 hover:border-gray-300 hover:shadow-lg transition-all group flex flex-col justify-between h-full min-h-[180px]">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2 bg-gray-50 rounded-xl group-hover:bg-gray-100 transition">
+              <span className="text-2xl">✉️</span>
+            </div>
+            <span className="bg-gray-50 text-gray-600 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide">
+              {guestPercentage.toFixed(0)}% Asistencia
+            </span>
+          </div>
+          <div>
+            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-1">Total Invitados</p>
+            <h3 className="text-3xl font-serif text-boda-text">{stats.totalGuests}</h3>
+            <p className="text-xs text-boda-text-light mt-1"><strong className="text-boda-text">{stats.confirmedGuests}</strong> confirmados</p>
+          </div>
+        </Link>
+
+        {/* 3. BUDGET STAT */}
+        <Link href="/dashboard/presupuesto" className="bg-white rounded-[2rem] p-6 border border-gray-100 hover:border-gray-300 hover:shadow-lg transition-all group flex flex-col justify-between h-full min-h-[180px]">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2 bg-gray-50 rounded-xl group-hover:bg-gray-100 transition">
+              <span className="text-2xl">💰</span>
+            </div>
+            <span className="bg-gray-50 text-gray-600 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide">
+              {budgetPercentage.toFixed(0)}% Pagado
+            </span>
+          </div>
+          <div>
+            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-1">Presupuesto</p>
+            <h3 className="text-3xl font-serif text-boda-text">{stats.totalPaid.toLocaleString()}€</h3>
+            <div className="w-full bg-gray-100 h-1 mt-3 rounded-full overflow-hidden">
+              <div className="bg-boda-text h-full transition-all duration-1000" style={{ width: `${budgetPercentage}%` }}></div>
+            </div>
+          </div>
+        </Link>
+
+        {/* 4. ACTIONS ROW (Span 2) */}
+        <div className="lg:col-span-2 bg-white rounded-[2rem] p-6 border border-gray-100 flex flex-col justify-center">
+          <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Acciones Rápidas</h4>
+          <div className="grid grid-cols-3 gap-3">
+            <button onClick={() => router.push('/dashboard/invitados')} className="p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition text-center group">
+              <span className="block text-xl mb-1 group-hover:-translate-y-0.5 transition-transform">👯‍♀️</span>
+              <span className="text-xs font-bold text-boda-text">Invitados</span>
+            </button>
+            <button onClick={() => router.push('/dashboard/mesas')} className="p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition text-center group">
+              <span className="block text-xl mb-1 group-hover:-translate-y-0.5 transition-transform">🍽️</span>
+              <span className="text-xs font-bold text-boda-text">Mesas</span>
+            </button>
+            <button onClick={() => router.push('/dashboard/presupuesto')} className="p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition text-center group">
+              <span className="block text-xl mb-1 group-hover:-translate-y-0.5 transition-transform">💶</span>
+              <span className="text-xs font-bold text-boda-text">Pagos</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 5. TIP OF THE DAY (Span 2) */}
+        <div className="lg:col-span-2 bg-gray-50 rounded-[2rem] p-6 border border-dashed border-gray-200 flex items-center gap-5 justify-between">
+          <div className="flex items-center gap-5">
+            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm flex-shrink-0">
+              💡
+            </div>
+            <div>
+              <h4 className="font-bold text-boda-text text-sm mb-0.5">Consejo Semanal</h4>
+              <p className="text-xs text-gray-500 leading-relaxed max-w-sm">
+                "Revisa las alergias alimentarias. Es un detalle que tus invitados agradecerán."
+              </p>
+            </div>
+          </div>
+          <button className="text-gray-300 hover:text-boda-text transition">✕</button>
+        </div>
+
       </div>
 
-      {/* SHORTCUTS */}
-      <h3 className="text-lg font-bold text-boda-text mb-4">Acciones Rápidas</h3>
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        <button onClick={() => router.push('/dashboard/invitados')} className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-200 rounded-xl hover:border-boda-green hover:shadow-md transition-all min-w-[200px]">
-          <span className="text-2xl">➕</span>
-          <div className="text-left">
-            <p className="font-bold text-boda-text text-sm">Añadir Invitado</p>
-            <p className="text-xs text-gray-400">Lista de espera</p>
-          </div>
-        </button>
-        <button onClick={() => router.push('/dashboard/presupuesto')} className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-200 rounded-xl hover:border-boda-pink hover:shadow-md transition-all min-w-[200px]">
-          <span className="text-2xl">💶</span>
-          <div className="text-left">
-            <p className="font-bold text-boda-text text-sm">Registrar Gasto</p>
-            <p className="text-xs text-gray-400">Nuevo pago</p>
-          </div>
-        </button>
-      </div>
     </div>
   );
 }

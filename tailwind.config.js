@@ -8,24 +8,25 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        'boda-bg': '#F9F7F4', // Fondo crema
+        'boda-bg': '#FAFAFA', // Off-white minimalista
         'boda-green': {
-          light: '#AEC2B4',
-          DEFAULT: '#7E9F87', // Verde oliva
-          dark: '#5C7A63'
+          light: '#E3EDE7', // Sage muy suave
+          DEFAULT: '#8AA692', // Sage elegante
+          dark: '#5F7A66'
         },
         'boda-pink': {
-          light: '#FAD0C9',
-          DEFAULT: '#F4B1A8', // Rosa palo
-          dark: '#D98F87'
+          light: '#F8E6E6', // Rose muy suave
+          DEFAULT: '#D4A5A5', // Dusty Rose
+          dark: '#9E7272'
         },
-        'boda-text': '#4A4A4A', // Gris oscuro elegante
-        'boda-text-light': '#8C8C8C',
+        'boda-text': '#18181B', // Zinc 900 (Negro suave)
+        'boda-text-light': '#71717A', // Zinc 500 (Gris medio)
+        'boda-accent': '#C5A065', // Champagne Gold
+        'boda-error': '#E11D48', // Rose Red
       },
       fontFamily: {
-        // Usamos las variables que definimos en layout.js
-        script: ['var(--font-script)', 'cursive'],
-        body: ['var(--font-body)', 'sans-serif'],
+        script: ['var(--font-script)', 'serif'], // Mapped to Playfair Display
+        body: ['var(--font-body)', 'sans-serif'], // Mapped to Inter
       },
       keyframes: {
         'fade-in-up': {
