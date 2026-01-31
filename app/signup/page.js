@@ -5,11 +5,11 @@ import { doc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../../firebase/config';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Button from '../../components/ui/Button';
 
 export default function SignupPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const router = useRouter();
 
@@ -17,11 +17,15 @@ export default function SignupPage() {
         e.preventDefault();
         setError('');
 
+        if (password !== confirmPassword) {
+            setError('Las contraseñas no coinciden.');
+            return;
+        }
+
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
 
-            // Crear documento base de usuario
             await setDoc(doc(db, 'users', user.uid), {
                 email: user.email,
                 role: 'user',
@@ -45,15 +49,9 @@ export default function SignupPage() {
             const result = await signInWithPopup(auth, googleProvider);
             const user = result.user;
 
-            // Check if user doc exists, if not create it
-            // Note: In a real app we might check existance, but setDoc with merge is safe enough for basic info
             await setDoc(doc(db, 'users', user.uid), {
                 email: user.email,
                 role: 'user',
-                // We don't overwrite weddingId if it exists, so spread logic might be better if we were editing, 
-                // but for signup standard setDoc is okay if we assume new user. 
-                // To be safe let's use merge: true or verify. 
-                // For simplicity in this demo, we'll write basic fields.
                 weddingId: null,
                 createdAt: new Date().toISOString()
             }, { merge: true });
@@ -66,62 +64,79 @@ export default function SignupPage() {
     }
 
     return (
-        <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-boda-bg">
-            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-boda-green/20">
-                <h1 className="text-3xl font-script text-boda-green-dark text-center mb-6">Crear Cuenta</h1>
+        <div className="flex min-h-screen items-center justify-center p-6 bg-[#FAFAFA]">
+            <div className="w-full max-w-md bg-white p-10 md:p-12 shadow-2xl shadow-gray-200/50 border border-gray-100 flex flex-col items-center">
 
-                {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">{error}</div>}
+                {/* Logo / Header */}
+                <Link href="/" className="mb-10 text-center group">
+                    <h1 className="font-script text-5xl text-boda-text mb-2 group-hover:text-boda-accent transition-colors">El Convite</h1>
+                    <div className="h-px w-12 bg-boda-accent mx-auto"></div>
+                </Link>
 
-                <form onSubmit={handleSignup} className="flex flex-col gap-4">
-                    <div>
-                        <label className="text-sm font-bold text-boda-text mb-1 block">Correo Electrónico</label>
+                <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-8">Solicitar Invitación</h2>
+
+                {error && <div className="w-full bg-red-50 text-red-500 text-xs font-bold p-3 mb-6 text-center border border-red-100 uppercase tracking-wide">{error}</div>}
+
+                <form onSubmit={handleSignup} className="w-full flex flex-col gap-6">
+
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Correo Electrónico</label>
                         <input
                             type="email"
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-boda-green"
+                            className="w-full border-b border-gray-200 py-2 text-boda-text focus:outline-none focus:border-boda-accent transition-colors bg-transparent placeholder-gray-300 font-serif"
+                            placeholder="su.nombre@ejemplo.com"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
                         />
                     </div>
 
-                    <div>
-                        <label className="text-sm font-bold text-boda-text mb-1 block">Contraseña</label>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Contraseña</label>
                         <input
                             type="password"
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-boda-green"
+                            className="w-full border-b border-gray-200 py-2 text-boda-text focus:outline-none focus:border-boda-accent transition-colors bg-transparent placeholder-gray-300 font-serif"
+                            placeholder="••••••••"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
                         />
                     </div>
 
-                    <Button type="submit" variant="primary" className="w-full justify-center mt-2">
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Confirmar Contraseña</label>
+                        <input
+                            type="password"
+                            className="w-full border-b border-gray-200 py-2 text-boda-text focus:outline-none focus:border-boda-accent transition-colors bg-transparent placeholder-gray-300 font-serif"
+                            placeholder="••••••••"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            required
+                        />
+                    </div>
+
+                    <button type="submit" className="mt-4 bg-boda-text text-white py-4 w-full font-bold text-xs uppercase tracking-widest hover:bg-black transition-all duration-500 shadow-lg hover:shadow-xl">
                         Registrarse
-                    </Button>
+                    </button>
                 </form>
 
-                <div className="flex items-center my-6">
-                    <div className="flex-grow border-t border-gray-200"></div>
-                    <span className="flex-shrink-0 mx-4 text-gray-400 text-sm">O continúa con</span>
-                    <div className="flex-grow border-t border-gray-200"></div>
+                <div className="w-full flex items-center gap-4 my-8">
+                    <div className="flex-1 h-px bg-gray-100"></div>
+                    <span className="text-[10px] uppercase tracking-widest text-gray-300 font-bold">O</span>
+                    <div className="flex-1 h-px bg-gray-100"></div>
                 </div>
 
                 <button
                     onClick={handleGoogleSignup}
                     type="button"
-                    className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-50 transition font-medium"
+                    className="w-full flex items-center justify-center gap-3 border border-gray-200 py-3 text-gray-500 hover:text-boda-text hover:border-boda-text transition-all duration-300 text-xs font-bold uppercase tracking-wide"
                 >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" />
-                        <path fill="#EA4335" d="M12 4.66c1.61 0 3.1.56 4.28 1.69l3.19-3.19C17.45 1.14 14.97 0 12 0 7.7 0 3.99 2.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                    </svg>
-                    Google
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4 grayscale opacity-60" alt="Google" />
+                    Registrarse con Google
                 </button>
 
-                <p className="text-center mt-6 text-sm text-gray-500">
-                    ¿Ya tienes cuenta? <Link href="/login" className="text-boda-green font-bold hover:underline">Inicia Sesión</Link>
+                <p className="mt-10 text-xs text-gray-400">
+                    ¿Ya es miembro? <Link href="/login" className="text-boda-accent font-bold border-b border-boda-accent/50 hover:text-boda-text transition-colors pb-0.5">Acceda aquí</Link>
                 </p>
 
             </div>

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Card from '../../../components/ui/Card';
 import { useAuth } from '../../../context/AuthContext';
 import DashboardSkeleton from '../../../components/loaders/DashboardSkeleton'; // Reuse skeleton
+import GuestRow from '../../../components/admin/GuestRow';
 
 export default function InvitadosPage() {
     const router = useRouter();
@@ -13,7 +14,12 @@ export default function InvitadosPage() {
     const [guests, setGuests] = useState([]);
     const [nuevoInvitado, setNuevoInvitado] = useState('');
     const [nuevoTelefono, setNuevoTelefono] = useState('');
+    const [nuevoGrupo, setNuevoGrupo] = useState('Familia'); // Default group
     const [isContactSupported, setIsContactSupported] = useState(false);
+
+    // UI State
+    const [searchTerm, setSearchTerm] = useState('');
+    const [viewMode, setViewMode] = useState('list'); // 'list' | 'grouped'
 
     // MODAL STATE
     const [editingGuest, setEditingGuest] = useState(null);
@@ -68,6 +74,7 @@ export default function InvitadosPage() {
         await addDoc(collection(db, 'weddings', weddingId, 'guests'), {
             nombre: nuevoInvitado,
             telefono: nuevoTelefono,
+            group: nuevoGrupo,
             confirmado: null,
             bus: false,
             creadoEn: new Date().toISOString()
@@ -103,7 +110,8 @@ export default function InvitadosPage() {
             await updateDoc(docRef, {
                 confirmado: tempData.confirmado,
                 bus: tempData.bus,
-                telefono: tempData.telefono // Save phone edits too
+                telefono: tempData.telefono,
+                group: tempData.group || 'Sin Grupo'
             });
             setEditingGuest(null);
         } catch (error) {
@@ -126,24 +134,28 @@ export default function InvitadosPage() {
     return (
         <div className="max-w-5xl mx-auto animate-fade-in space-y-8">
 
-            {/* HEADER & STATS */}
+            {/* HEADER & CONTROLS */}
             <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-gray-100 pb-6">
                 <div>
                     <h1 className="text-3xl font-serif text-boda-text">Lista de Invitados</h1>
                     <p className="text-gray-400 mt-1">Gestiona la asistencia de tus seres queridos</p>
                 </div>
-                <div className="flex gap-3">
-                    <div className="px-4 py-2 bg-white border border-gray-100 rounded-xl shadow-sm text-center">
-                        <span className="block text-xs text-gray-400 font-bold uppercase tracking-wider">Total</span>
-                        <span className="text-xl font-serif text-boda-text">{guests.length}</span>
+
+                {/* Search & View Toggle */}
+                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                    <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                        <input
+                            type="text"
+                            placeholder="Buscar..."
+                            className="bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2 text-sm outline-none focus:border-boda-text w-full sm:w-48 transition"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
                     </div>
-                    <div className="px-4 py-2 bg-green-50 border border-green-100 rounded-xl text-center">
-                        <span className="block text-xs text-green-600 font-bold uppercase tracking-wider">Asistirán</span>
-                        <span className="text-xl font-serif text-green-700">{guests.filter(g => g.confirmado === true).length}</span>
-                    </div>
-                    <div className="px-4 py-2 bg-red-50 border border-red-100 rounded-xl text-center">
-                        <span className="block text-xs text-red-600 font-bold uppercase tracking-wider">No Asistirán</span>
-                        <span className="text-xl font-serif text-red-700">{guests.filter(g => g.confirmado === false).length}</span>
+                    <div className="flex bg-gray-100 p-1 rounded-xl">
+                        <button onClick={() => setViewMode('list')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${viewMode === 'list' ? 'bg-white shadow-sm text-boda-text' : 'text-gray-400'}`}>Lista</button>
+                        <button onClick={() => setViewMode('grouped')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${viewMode === 'grouped' ? 'bg-white shadow-sm text-boda-text' : 'text-gray-400'}`}>Grupos</button>
                     </div>
                 </div>
             </div>
@@ -154,14 +166,25 @@ export default function InvitadosPage() {
                     <span>+</span>
                 </div>
                 <form onSubmit={handleAddGuest} className="flex-1 flex flex-col md:flex-row gap-3 w-full">
+                    <div className="flex-1 flex gap-2">
+                        <input
+                            type="text" placeholder="Nombre..."
+                            className="flex-1 bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl px-4 py-2 outline-none transition-all w-full min-w-[120px]"
+                            value={nuevoInvitado} onChange={(e) => setNuevoInvitado(e.target.value)}
+                        />
+                        <select
+                            className="bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl px-3 py-2 outline-none text-sm text-gray-600"
+                            value={nuevoGrupo} onChange={(e) => setNuevoGrupo(e.target.value)}
+                        >
+                            <option value="Familia">Familia</option>
+                            <option value="Amigos">Amigos</option>
+                            <option value="Trabajo">Trabajo</option>
+                            <option value="Otros">Otros</option>
+                        </select>
+                    </div>
                     <input
-                        type="text" placeholder="Nombre del invitado..."
-                        className="flex-1 bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl px-4 py-2 outline-none transition-all"
-                        value={nuevoInvitado} onChange={(e) => setNuevoInvitado(e.target.value)}
-                    />
-                    <input
-                        type="tel" placeholder="Teléfono (opcional)..."
-                        className="w-full md:w-48 bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl px-4 py-2 outline-none transition-all"
+                        type="tel" placeholder="Teléfono..."
+                        className="w-full md:w-32 bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl px-4 py-2 outline-none transition-all"
                         value={nuevoTelefono} onChange={(e) => setNuevoTelefono(e.target.value)}
                     />
                     <div className="flex gap-2">
@@ -178,7 +201,7 @@ export default function InvitadosPage() {
             </div>
 
             {/* GUEST LIST */}
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[400px]">
                 {guests.length === 0 ? (
                     <div className="text-center py-20">
                         <p className="text-gray-300 text-6xl mb-4">📭</p>
@@ -186,59 +209,37 @@ export default function InvitadosPage() {
                     </div>
                 ) : (
                     <div className="divide-y divide-gray-50">
-                        {guests.map((guest) => {
-                            const initials = guest.nombre.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-                            return (
-                                <div key={guest.id} onClick={() => openEditModal(guest)} className="p-4 hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-4 group">
+                        {(() => {
+                            // Filter Logic
+                            const filteredGuests = guests.filter(g => g.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
 
-                                    {/* Avatar */}
-                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${guest.confirmado === true ? 'bg-green-100 text-green-700' :
-                                        guest.confirmado === false ? 'bg-red-100 text-red-700' :
-                                            'bg-gray-100 text-gray-500'
-                                        }`}>
-                                        {initials}
-                                    </div>
+                            // Grouping Logic
+                            if (viewMode === 'grouped') {
+                                const grouped = filteredGuests.reduce((acc, guest) => {
+                                    const group = guest.group || 'Sin Grupo';
+                                    if (!acc[group]) acc[group] = [];
+                                    acc[group].push(guest);
+                                    return acc;
+                                }, {});
 
-                                    {/* Info */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <p className="font-bold text-boda-text truncate">{guest.nombre}</p>
-                                            <span className={`w-2 h-2 rounded-full ${guest.confirmado === true ? 'bg-green-500' :
-                                                guest.confirmado === false ? 'bg-red-500' : 'bg-gray-300'
-                                                }`}></span>
+                                return Object.entries(grouped).map(([groupName, groupGuests]) => (
+                                    <div key={groupName}>
+                                        <div className="bg-gray-50 px-6 py-3 border-y border-gray-100 flex justify-between items-center">
+                                            <h3 className="font-bold text-gray-500 uppercase tracking-widest text-xs">{groupName}</h3>
+                                            <span className="bg-gray-200 text-gray-500 text-[10px] px-2 py-0.5 rounded-full font-bold">{groupGuests.length}</span>
                                         </div>
-                                        <p className="text-xs text-gray-400 truncate">{guest.telefono || 'Sin teléfono'}</p>
+                                        {groupGuests.map(guest => <GuestRow key={guest.id} guest={guest} onClick={() => openEditModal(guest)} waAction={(e) => sendWhatsApp(e, guest.id, guest.nombre, guest.telefono)} />)}
                                     </div>
+                                ));
+                            }
 
-                                    {/* Badges */}
-                                    <div className="hidden sm:flex items-center gap-2">
-                                        {guest.bus && (
-                                            <span className="px-2 py-1 bg-purple-50 text-purple-600 rounded-md text-[10px] font-bold uppercase tracking-wide">
-                                                Bus
-                                            </span>
-                                        )}
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${guest.confirmado === true ? 'bg-green-50 text-green-700' :
-                                            guest.confirmado === false ? 'bg-red-50 text-red-700' :
-                                                'bg-gray-100 text-gray-500'
-                                            }`}>
-                                            {guest.confirmado === true ? 'Confirmado' : guest.confirmado === false ? 'No asiste' : 'Pendiente'}
-                                        </span>
-                                    </div>
+                            // List Logic
+                            if (filteredGuests.length === 0) return <div className="p-10 text-center text-gray-400">No se encontraron resultados</div>;
 
-                                    {/* Actions */}
-                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button
-                                            onClick={(e) => sendWhatsApp(e, guest.id, guest.nombre, guest.telefono)}
-                                            className="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center hover:bg-green-100 transition"
-                                            title="Enviar WhatsApp"
-                                        >
-                                            💬
-                                        </button>
-                                        <span className="text-gray-300">›</span>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                            return filteredGuests.map(guest => (
+                                <GuestRow key={guest.id} guest={guest} onClick={() => openEditModal(guest)} waAction={(e) => sendWhatsApp(e, guest.id, guest.nombre, guest.telefono)} />
+                            ));
+                        })()}
                     </div>
                 )}
             </div>
@@ -303,6 +304,20 @@ export default function InvitadosPage() {
                                         onChange={(e) => setTempData({ ...tempData, telefono: e.target.value })}
                                         placeholder="+34 600..."
                                     />
+                                </label>
+
+                                <label className="block">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Grupo</span>
+                                    <select
+                                        className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl px-4 py-3 outline-none transition-all text-boda-text appearance-none"
+                                        value={tempData.group || 'Familia'}
+                                        onChange={(e) => setTempData({ ...tempData, group: e.target.value })}
+                                    >
+                                        <option value="Familia">Familia</option>
+                                        <option value="Amigos">Amigos</option>
+                                        <option value="Trabajo">Trabajo</option>
+                                        <option value="Otros">Otros</option>
+                                    </select>
                                 </label>
                             </div>
 

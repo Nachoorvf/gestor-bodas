@@ -78,13 +78,8 @@ export default function VisualTable({ table, guests = [], isDragging, isSelected
                 // React-Draggable doesn't block onClick if no drag occurred.
                 onClick={(e) => {
                     e.stopPropagation();
-                    // If we are NOT in layout mode, the mousedown in onStart might not have fired/done what we wanted for selection?
-                    // actually onStart fires even if disabled=false? No.
-                    // If disabled=true (View Mode), Draggable acts like a normal div.
-                    // So we need explicit click handler here for View Mode selection.
-                    if (!isLayoutMode) {
-                        onInteraction(e, 'click');
-                    }
+                    // Always fire click interaction. React-Draggable prevents this if a drag occurred.
+                    onInteraction(e, 'click');
                 }}
 
                 // Drop Zone Support

@@ -22,14 +22,12 @@ export default function RequestWeddingPage() {
                 router.push('/login');
             } else {
                 setUser(currentUser);
-                // 1. Check if already has wedding
                 const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
                 if (userDoc.exists() && userDoc.data().weddingId) {
                     router.push('/dashboard');
                     return;
                 }
 
-                // 2. Check if has PENDING request
                 const q = query(
                     collection(db, 'wedding_requests'),
                     where('userId', '==', currentUser.uid),
@@ -37,7 +35,6 @@ export default function RequestWeddingPage() {
                 );
                 const querySnapshot = await getDocs(q);
                 if (!querySnapshot.empty) {
-                    // Already has a pending request -> Show success/processing view
                     setStatus('success');
                 }
             }
@@ -71,67 +68,76 @@ export default function RequestWeddingPage() {
 
     if (status === 'success') {
         return (
-            <div className="min-h-screen bg-boda-bg flex items-center justify-center p-4">
-                <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md text-center">
-                    <div className="w-16 h-16 bg-boda-green/20 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
-                        🎉
+            <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-6">
+                <div className="w-full max-w-md bg-white p-12 shadow-2xl shadow-gray-200/50 border border-gray-100 flex flex-col items-center text-center">
+                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6">
+                        <span className="text-4xl">✨</span>
                     </div>
-                    <h1 className="text-2xl font-bold text-boda-text mb-2">¡Solicitud Enviada!</h1>
-                    <p className="text-gray-600 mb-6">
-                        Hemos recibido los datos de tu boda. El administrador revisará tu solicitud y te avisará cuando tu espacio esté listo.
+                    <h1 className="font-script text-4xl text-boda-text mb-4">Solicitud Recibida</h1>
+                    <div className="h-px w-12 bg-boda-accent mx-auto mb-6"></div>
+                    <p className="text-gray-500 mb-10 font-light leading-relaxed">
+                        Su petición ha sido registrada. Nuestro equipo de concierges revisará los detalles y habilitará su espacio exclusivo en breve.
                     </p>
-                    <Button href="/" variant="outline">Volver al Inicio</Button>
+                    <button onClick={() => router.push('/')} className="px-8 py-3 bg-transparent text-boda-text border border-gray-300 font-bold text-xs uppercase tracking-widest hover:border-boda-text hover:bg-gray-50 transition-all">
+                        Volver al Inicio
+                    </button>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-boda-bg flex items-center justify-center p-4">
-            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg border-t-8 border-boda-pink">
-                <h1 className="text-3xl font-script text-boda-pink-dark text-center mb-2">Crea tu Boda</h1>
-                <p className="text-center text-gray-500 mb-8">Cuéntanos los detalles básicos para preparar tu espacio.</p>
+        <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-6">
+            <div className="w-full max-w-lg bg-white p-10 md:p-12 shadow-2xl shadow-gray-200/50 border border-gray-100 flex flex-col">
+                <div className="text-center mb-10">
+                    <h1 className="font-script text-4xl md:text-5xl text-boda-text mb-4">Diseñe su Boda</h1>
+                    <p className="text-gray-400 text-sm uppercase tracking-widest font-bold">Detalles Preliminares</p>
+                </div>
 
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <div className="flex gap-4">
-                        <div className="w-1/2">
-                            <label className="text-sm font-bold text-boda-text mb-1 block">Tu Nombre</label>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-8">
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="flex flex-col gap-2">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Su Nombre</label>
                             <input
                                 name="nombre1"
                                 type="text"
                                 placeholder="Ej: Ana"
-                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-boda-pink"
+                                className="w-full border-b border-gray-200 py-2 text-boda-text focus:outline-none focus:border-boda-accent transition-colors bg-transparent placeholder-gray-300 font-serif"
                                 onChange={handleChange}
                                 required
                             />
                         </div>
-                        <div className="w-1/2">
-                            <label className="text-sm font-bold text-boda-text mb-1 block">Tu Pareja</label>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Su Pareja</label>
                             <input
                                 name="nombre2"
                                 type="text"
                                 placeholder="Ej: Carlos"
-                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-boda-pink"
+                                className="w-full border-b border-gray-200 py-2 text-boda-text focus:outline-none focus:border-boda-accent transition-colors bg-transparent placeholder-gray-300 font-serif"
                                 onChange={handleChange}
                                 required
                             />
                         </div>
                     </div>
 
-                    <div>
-                        <label className="text-sm font-bold text-boda-text mb-1 block">Fecha de la Boda</label>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Fecha del Evento</label>
                         <input
                             name="fecha"
                             type="date"
-                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-boda-pink text-gray-600"
+                            className="w-full border-b border-gray-200 py-2 text-boda-text focus:outline-none focus:border-boda-accent transition-colors bg-transparent text-gray-600 font-serif"
                             onChange={handleChange}
                             required
                         />
                     </div>
 
-                    <Button type="submit" variant="secondary" className="w-full justify-center mt-4" disabled={loading}>
-                        {loading ? 'Enviando...' : 'Solicitar Espacio'}
-                    </Button>
+                    <button type="submit" className="mt-6 bg-boda-text text-white py-4 w-full font-bold text-xs uppercase tracking-widest hover:bg-black transition-all duration-500 shadow-lg hover:shadow-xl disabled:opacity-50" disabled={loading}>
+                        {loading ? 'Procesando...' : 'Solicitar Espacio'}
+                    </button>
+
+                    <p className="text-center text-[10px] text-gray-300 mt-4 leading-relaxed">
+                        Al continuar, acepta nuestros términos de servicio exclusivos y política de privacidad.
+                    </p>
                 </form>
             </div>
         </div>

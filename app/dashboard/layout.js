@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }) {
                     {/* 1. LOGO */}
                     <div className="flex-shrink-0">
                         <Link href="/dashboard" className="font-script text-3xl text-boda-text tracking-wide hover:opacity-80 transition-opacity">
-                            Gestor Bodas
+                            El Convite
                         </Link>
                     </div>
 
@@ -51,8 +51,8 @@ export default function DashboardLayout({ children }) {
                                     key={item.href}
                                     href={item.href}
                                     className={`text-sm font-medium tracking-wide transition-colors duration-200 ${isActive
-                                            ? 'text-boda-text border-b-2 border-boda-text pb-1'
-                                            : 'text-gray-500 hover:text-boda-text'
+                                        ? 'text-boda-text border-b-2 border-boda-text pb-1'
+                                        : 'text-gray-500 hover:text-boda-text'
                                         }`}
                                 >
                                     {item.name}

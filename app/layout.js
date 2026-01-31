@@ -15,7 +15,7 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "Gestor de Bodas",
+  title: "El Convite",
   description: "La app para organizar tu gran día",
 };
 

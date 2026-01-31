@@ -124,9 +124,9 @@ export default function MesasPage() {
                 return;
             }
 
-            // Just Select
+            // Just Select (Don't open inspector yet, wait for click or drag end)
             setSelectedTableId(tableId);
-            setActiveTab('inspector');
+            // setActiveTab('inspector'); // REMOVED: Don't switch tab on drag start
         }
 
         if (type === 'click') {
@@ -156,7 +156,7 @@ export default function MesasPage() {
 
     return (
         <div
-            className="h-[calc(100vh-100px)] flex flex-col md:flex-row gap-6 overflow-hidden animate-fade-in"
+            className="h-[calc(100vh-100px)] flex flex-col md:flex-row gap-6 overflow-hidden animate-fade-in relative"
         >
 
             {/* 1. LEFT SIDEBAR: GUESTS (Desktop always visible, Mobile tab) */}
@@ -176,7 +176,7 @@ export default function MesasPage() {
                 </div>
 
                 <div
-                    className="flex-1 overflow-y-auto p-3 space-y-2"
+                    className="flex-1 overflow-y-auto p-3 space-y-2 pb-24 md:pb-3"
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={async (e) => {
                         const gId = e.dataTransfer.getData("guestId");
@@ -371,12 +371,7 @@ export default function MesasPage() {
                     </div>
                 </div>
 
-                {/* Mobile Tabs */}
-                <div className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-white rounded-full shadow-xl border border-gray-100 p-1 flex gap-1 z-40">
-                    <button onClick={() => setActiveTab('guests')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${activeTab === 'guests' ? 'bg-boda-text text-white' : 'text-gray-500 hover:bg-gray-50'}`}>Invitados</button>
-                    <button onClick={() => setActiveTab('map')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${activeTab === 'map' ? 'bg-boda-text text-white' : 'text-gray-500 hover:bg-gray-50'}`}>Mapa</button>
-                    <button onClick={() => setActiveTab('inspector')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${activeTab === 'inspector' ? 'bg-boda-text text-white' : 'text-gray-500 hover:bg-gray-50'}`}>Editor</button>
-                </div>
+
             </div>
 
             {/* 3. RIGHT SIDEBAR: INSPECTOR (Contextual) */}
@@ -390,7 +385,7 @@ export default function MesasPage() {
                             <h2 className="font-serif text-xl text-boda-text mb-1">Editar Mesa</h2>
                             <p className="text-xs text-gray-400">Personaliza nombre y capacidad</p>
                         </div>
-                        <div className="p-5 space-y-6 flex-1 overflow-y-auto">
+                        <div className="p-5 space-y-6 flex-1 overflow-y-auto pb-24 md:pb-5">
 
                             {/* Name Input */}
                             <div>
@@ -470,6 +465,13 @@ export default function MesasPage() {
                         <p className="text-xs mt-2 opacity-70">O haz clic en la barra de herramientas para crear una nueva</p>
                     </div>
                 )}
+            </div>
+
+            {/* Mobile Tabs (Moved Overlay) */}
+            <div className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 bg-white rounded-full shadow-xl border border-gray-100 p-1 flex gap-1 z-50">
+                <button onClick={() => setActiveTab('guests')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${activeTab === 'guests' ? 'bg-boda-text text-white' : 'text-gray-500 hover:bg-gray-50'}`}>Invitados</button>
+                <button onClick={() => setActiveTab('map')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${activeTab === 'map' ? 'bg-boda-text text-white' : 'text-gray-500 hover:bg-gray-50'}`}>Mapa</button>
+                <button onClick={() => setActiveTab('inspector')} className={`px-4 py-2 rounded-full text-xs font-bold transition ${activeTab === 'inspector' ? 'bg-boda-text text-white' : 'text-gray-500 hover:bg-gray-50'}`}>Editor</button>
             </div>
         </div>
     );

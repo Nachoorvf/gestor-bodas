@@ -113,9 +113,9 @@ export default function PresupuestoPage() {
 
             {/* STATS CARDS */}
             <div className="grid md:grid-cols-3 gap-6 mb-8">
-                <Card className="bg-[#2C4A34] text-white"> {/* Nuevo color verde más oscuro para contraste */}
-                    <p className="text-xs opacity-80 uppercase tracking-widest font-bold">Presupuesto Total</p>
-                    <p className="text-4xl font-serif mt-2">{totalEstimated.toLocaleString()}€</p>
+                <Card>
+                    <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">Presupuesto Total</p>
+                    <p className="text-4xl font-serif text-boda-text mt-2">{totalEstimated.toLocaleString()}€</p>
                 </Card>
                 <Card>
                     <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">Pagado</p>

@@ -14,8 +14,8 @@ export default function Navbar() {
 
                     {/* Logo */}
                     <div className="flex-shrink-0 flex items-center">
-                        <Link href="/" className="font-script text-3xl text-boda-green-dark group hover:text-boda-green transition-colors">
-                            Gestor de Bodas
+                        <Link href="/" className="font-script text-3xl text-boda-text group hover:text-boda-accent transition-colors">
+                            El Convite
                         </Link>
                     </div>
 
