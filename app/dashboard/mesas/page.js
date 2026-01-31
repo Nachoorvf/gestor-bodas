@@ -26,14 +26,15 @@ export default function MesasPage() {
     // UI STATES
     const [activeTab, setActiveTab] = useState('map'); // 'guests', 'map', 'inspector'
     const [zoom, setZoom] = useState(0.8);
+    const [pan, setPan] = useState({ x: 0, y: 0 }); // NEW: Canvas Panning
+    const [isLayoutMode, setIsLayoutMode] = useState(false); // NEW: Controls drag vs view state
     const [selectedTableId, setSelectedTableId] = useState(null);
     const [selectedGuestId, setSelectedGuestId] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     // DRAGGING STATE
-    const [draggingTableId, setDraggingTableId] = useState(null);
     const [draggingGuest, setDraggingGuest] = useState(null); // { guest, sourceTableId }
-    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
     const canvasRef = useRef(null);
 
     // 1. Auth Check
@@ -61,9 +62,11 @@ export default function MesasPage() {
 
     const handleAddTable = async (type) => {
         const preset = TABLE_PRESETS[type];
-        // Calculate center of current view approx
-        const initialX = 100 + (tables.length * 30) % 800;
-        const initialY = 100 + (tables.length * 30) % 500;
+
+        // Smart Center: Place in center of visible canvas
+        const canvasRect = canvasRef.current?.getBoundingClientRect();
+        const centerX = canvasRect ? (canvasRect.width / 2 - pan.x) / zoom : 400;
+        const centerY = canvasRect ? (canvasRect.height / 2 - pan.y) / zoom : 300;
 
         const docRef = await addDoc(collection(db, 'weddings', weddingId, 'tables'), {
             name: `Mesa ${tables.length + 1}`,
@@ -72,7 +75,7 @@ export default function MesasPage() {
             seats: preset.seats,
             width: preset.width,
             height: preset.height,
-            position: { x: initialX, y: initialY },
+            position: { x: centerX - preset.width / 2, y: centerY - preset.height / 2 },
             createdAt: new Date().toISOString()
         });
         setSelectedTableId(docRef.id);
@@ -103,48 +106,46 @@ export default function MesasPage() {
 
     // --- CANVAS INTERACTION ---
 
+    // --- CANVAS INTERACTION ---
+
     const handleTableInteraction = (e, type, tableId) => {
-        e.stopPropagation();
-        if (type === 'mousedown' || type === 'touchstart') {
+        if (type === 'drop') {
+            const guestId = e.dataTransfer.getData("guestId");
+            if (guestId) assignGuest(guestId, tableId);
+            return;
+        }
+
+        if (type === 'mousedown') {
+            // If dragging a guest, do nothing here (drop handled above)
+            // If waiting to assign to table (clicked guest first)
             if (selectedGuestId) {
-                // Assign mode
                 assignGuest(selectedGuestId, tableId);
                 setSelectedGuestId(null);
                 return;
             }
 
+            // Just Select
             setSelectedTableId(tableId);
-            setDraggingTableId(tableId);
-            setActiveTab('inspector'); // Switch to inspector on click
+            setActiveTab('inspector');
+        }
 
-            const clientX = e.clientX || e.touches[0].clientX;
-            const clientY = e.clientY || e.touches[0].clientY;
-            const rect = e.currentTarget.getBoundingClientRect();
-
-            setDragOffset({
-                x: (clientX - rect.left) / zoom,
-                y: (clientY - rect.top) / zoom
-            });
+        if (type === 'click') {
+            // Handle explicit click from View Mode
+            if (selectedGuestId) {
+                assignGuest(selectedGuestId, tableId);
+                setSelectedGuestId(null);
+                return;
+            }
+            setSelectedTableId(tableId);
+            setActiveTab('inspector');
         }
     };
 
-    const moveTable = (clientX, clientY) => {
-        if (!draggingTableId || !canvasRef.current) return;
-
-        const canvasRect = canvasRef.current.getBoundingClientRect();
-        const x = (clientX - canvasRect.left) / zoom - dragOffset.x;
-        const y = (clientY - canvasRect.top) / zoom - dragOffset.y;
-
-        // Optimistic update
-        setTables(prev => prev.map(t => t.id === draggingTableId ? { ...t, position: { x, y } } : t));
-    };
-
-    const finishDrag = async () => {
-        if (draggingTableId) {
-            const t = tables.find(t => t.id === draggingTableId);
-            if (t) await updateTable(draggingTableId, { position: t.position });
-            setDraggingTableId(null);
-        }
+    const handleMoveEnd = async (tableId, x, y) => {
+        // Update local state first for snap
+        setTables(prev => prev.map(t => t.id === tableId ? { ...t, position: { x, y } } : t));
+        // Save to DB
+        await updateTable(tableId, { position: { x, y } });
     };
 
     // --- RENDER HELPERS ---
@@ -156,14 +157,6 @@ export default function MesasPage() {
     return (
         <div
             className="h-[calc(100vh-100px)] flex flex-col md:flex-row gap-6 overflow-hidden animate-fade-in"
-            onMouseMove={(e) => moveTable(e.clientX, e.clientY)}
-            onTouchMove={(e) => {
-                if (draggingTableId) e.preventDefault(); // Prevent scroll
-                if (e.touches[0]) moveTable(e.touches[0].clientX, e.touches[0].clientY);
-            }}
-            onMouseUp={finishDrag}
-            onTouchEnd={finishDrag}
-            onMouseLeave={finishDrag}
         >
 
             {/* 1. LEFT SIDEBAR: GUESTS (Desktop always visible, Mobile tab) */}
@@ -225,32 +218,58 @@ export default function MesasPage() {
                 ${activeTab === 'map' ? 'flex' : 'hidden md:flex'}
                 flex-1 flex-col bg-gray-100/50 rounded-3xl border border-gray-200 overflow-hidden relative shadow-inner
             `}>
-                {/* Visual Toolbar */}
-                <div className="absolute top-4 left-4 z-30 flex flex-col gap-2">
-                    <div className="bg-white p-2 rounded-2xl shadow-lg border border-gray-100 flex flex-col gap-1">
-                        {Object.entries(TABLE_PRESETS).map(([key, preset]) => (
-                            <button
-                                key={key}
-                                onClick={() => handleAddTable(key)}
-                                className="w-10 h-10 rounded-xl hover:bg-gray-50 flex items-center justify-center text-gray-600 hover:text-boda-text transition tooltip-trigger group relative"
-                                title={preset.label}
-                            >
-                                {key === 'round' && <div className="w-5 h-5 border-2 border-current rounded-full" />}
-                                {key === 'rectangular' && <div className="w-6 h-3 border-2 border-current rounded-sm" />}
-                                {key === 'square' && <div className="w-5 h-5 border-2 border-current rounded-md" />}
-                                {key === 'presidential' && (
-                                    <div className="w-7 h-3 border-2 border-current rounded-md flex items-center justify-center gap-1">
-                                        <div className="w-0.5 h-1.5 bg-current rounded-full"></div>
-                                        <div className="w-0.5 h-1.5 bg-current rounded-full"></div>
-                                    </div>
-                                )}
+                {/* Visual Toolbar - Only in Layout Mode */}
+                {isLayoutMode && (
+                    <div className="absolute top-4 left-4 z-30 flex flex-col gap-2 animate-fade-in">
+                        <div className="bg-white p-2 rounded-2xl shadow-lg border border-gray-100 flex flex-col gap-1">
+                            {Object.entries(TABLE_PRESETS).map(([key, preset]) => (
+                                <button
+                                    key={key}
+                                    onClick={() => handleAddTable(key)}
+                                    className="w-10 h-10 rounded-xl hover:bg-gray-50 flex items-center justify-center text-gray-600 hover:text-boda-text transition tooltip-trigger group relative"
+                                    title={preset.label}
+                                >
+                                    {key === 'round' && <div className="w-5 h-5 border-2 border-current rounded-full" />}
+                                    {key === 'rectangular' && <div className="w-6 h-3 border-2 border-current rounded-sm" />}
+                                    {key === 'square' && <div className="w-5 h-5 border-2 border-current rounded-md" />}
+                                    {key === 'presidential' && (
+                                        <div className="w-7 h-3 border-2 border-current rounded-md flex items-center justify-center gap-1">
+                                            <div className="w-0.5 h-1.5 bg-current rounded-full"></div>
+                                            <div className="w-0.5 h-1.5 bg-current rounded-full"></div>
+                                        </div>
+                                    )}
 
-                                <span className="absolute left-full ml-2 bg-boda-text text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-50">
-                                    {preset.label}
-                                </span>
-                            </button>
-                        ))}
+                                    <span className="absolute left-full ml-2 bg-boda-text text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-50">
+                                        {preset.label}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
+                )}
+
+                {/* LAYOUT MODE TOGGLE (Floating Bottom Center) */}
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsLayoutMode(!isLayoutMode);
+                            setSelectedTableId(null); // Deselect when switching modes
+                        }}
+                        className={`
+                            flex items-center gap-2 px-6 py-3 rounded-full shadow-xl font-bold text-sm transition-all transform hover:scale-105
+                            ${isLayoutMode
+                                ? 'bg-boda-text text-white ring-4 ring-boda-text/20'
+                                : 'bg-white text-gray-600 hover:text-boda-text border border-gray-100'
+                            }
+                        `}
+                    >
+                        {isLayoutMode ? (
+                            <><span>✅</span> <span>Guardar Distribución</span></>
+                        ) : (
+                            <><span>✏️</span> <span>Editar Distribución</span></>
+                        )}
+                    </button>
                 </div>
 
                 {/* Zoom Controls */}
@@ -263,36 +282,90 @@ export default function MesasPage() {
                 {/* Canvas Area */}
                 <div
                     ref={canvasRef}
-                    className="flex-1 w-full relative overflow-hidden touch-none"
-                    onDragOver={(e) => e.preventDefault()}
+                    className={`flex-1 w-full relative overflow-hidden touch-none ${activeTab === 'map' ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                    onDragOver={(e) => e.preventDefault()} // Allow drop
                     onDrop={(e) => {
                         e.preventDefault();
-                        // Dropping on canvas (not on table) doesn't assign, effectively unassigns if coming from table?? 
-                        // For now, let's keep unassign logic to the sidebar drop zone to avoid accidents.
+                        // Handle dropping guest on background (maybe unassign? For now do nothing to be safe)
                     }}
-                    onClick={() => {
-                        setSelectedTableId(null);
-                        // if searching on mobile, maybe auto-hide inspector?
-                        if (window.innerWidth < 768) setActiveTab('map');
+                    onMouseDown={(e) => {
+                        // Start Panning
+                        if (e.target === canvasRef.current || e.target.className.includes('grid-pattern')) {
+                            const startX = e.clientX;
+                            const startY = e.clientY;
+                            const startPan = { ...pan };
+
+                            const onMouseMove = (moveEvent) => {
+                                const dx = moveEvent.clientX - startX;
+                                const dy = moveEvent.clientY - startY;
+                                setPan({ x: startPan.x + dx, y: startPan.y + dy });
+                            };
+
+                            const onMouseUp = () => {
+                                window.removeEventListener('mousemove', onMouseMove);
+                                window.removeEventListener('mouseup', onMouseUp);
+                            };
+
+                            window.addEventListener('mousemove', onMouseMove);
+                            window.addEventListener('mouseup', onMouseUp);
+
+                            // Deselect table if clicking background
+                            setSelectedTableId(null);
+                            if (window.innerWidth < 768) setActiveTab('map');
+                        }
+                    }}
+                    // Touch Panning Support
+                    onTouchStart={(e) => {
+                        if (e.target === canvasRef.current || e.target.className.includes('grid-pattern')) {
+                            const touch = e.touches[0];
+                            const startX = touch.clientX;
+                            const startY = touch.clientY;
+                            const startPan = { ...pan };
+
+                            const onTouchMove = (moveEvent) => {
+                                const t = moveEvent.touches[0];
+                                const dx = t.clientX - startX;
+                                const dy = t.clientY - startY;
+                                setPan({ x: startPan.x + dx, y: startPan.y + dy });
+                            };
+
+                            const onTouchEnd = () => {
+                                window.removeEventListener('touchmove', onTouchMove);
+                                window.removeEventListener('touchend', onTouchEnd);
+                            };
+
+                            window.addEventListener('touchmove', onTouchMove, { passive: false });
+                            window.addEventListener('touchend', onTouchEnd);
+                        }
                     }}
                 >
                     <div
-                        className="absolute origin-top-left transition-transform duration-75 ease-out"
-                        style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%`, height: `${100 / zoom}%` }}
+                        className="absolute origin-top-left transition-transform duration-75 ease-out will-change-transform"
+                        style={{
+                            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                            width: '100%',
+                            height: '100%'
+                        }}
                     >
                         {/* Grid Pattern */}
-                        <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
-                            style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
+                        <div className="absolute inset-[-200%] w-[500%] h-[500%] opacity-[0.03] pointer-events-none grid-pattern"
+                            style={{
+                                backgroundImage: 'radial-gradient(#000 1px, transparent 1px)',
+                                backgroundSize: '40px 40px',
+                                marginLeft: -2000,
+                                marginTop: -2000
+                            }}></div>
 
                         {tables.map(table => (
                             <VisualTable
                                 key={table.id}
                                 table={table}
                                 guests={getGuestsForTable(table.id)}
-                                isDragging={draggingTableId === table.id}
                                 isSelected={selectedTableId === table.id}
+                                isLayoutMode={isLayoutMode}
                                 scale={zoom}
                                 onInteraction={(e, type) => handleTableInteraction(e, type, table.id)}
+                                onMoveEnd={handleMoveEnd}
                             />
                         ))}
                     </div>
