@@ -116,14 +116,14 @@ export default function PaginaInvitacion() {
         <div className="px-8 text-center space-y-8 -mt-20 relative z-10">
 
           {/* WEDDING INFO */}
-          <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-sm border border-gray-50">
+          <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-sm border border-gray-50 flex flex-col items-center">
             <p className="text-[#333] text-[10px] tracking-[0.3em] uppercase font-bold mb-4 opacity-60">
               {new Date(boda.fecha).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
-            <h1 className="font-display text-5xl text-[#333] mb-2 leading-none">
-              {boda.novios ? boda.novios[0] : ''}
-              <span className="text-3xl text-boda-accent italic mx-3">&</span>
-              {boda.novios ? boda.novios[1] : ''}
+            <h1 className="font-display text-5xl text-[#333] mb-2 leading-none flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4">
+              <span>{boda.novios ? boda.novios[0] : ''}</span>
+              <span className="text-3xl text-boda-accent italic font-light">&</span>
+              <span>{boda.novios ? boda.novios[1] : ''}</span>
             </h1>
           </div>
 
