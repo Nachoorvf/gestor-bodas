@@ -4,7 +4,7 @@ import { db } from '../../../firebase/config';
 import { doc, updateDoc, onSnapshot, query, orderBy, collection, addDoc, deleteDoc, writeBatch, getDoc, arrayUnion } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
-import { Search, Mail, Phone, Users, Check, X, Clock, Bus, Plus, Trash2, Edit2, Link, MessageCircle } from 'lucide-react';
+import { Search, Mail, Phone, Users, Check, X, Clock, Bus, Plus, Trash2, Edit2, Link, MessageCircle, ChevronLeft } from 'lucide-react';
 
 export default function InvitadosPage() {
     const router = useRouter();
@@ -459,10 +459,25 @@ export default function InvitadosPage() {
                 </div>
 
                 {/* RIGHT: DETAILS PANEL */}
-                <div className="flex-1 lg:max-w-md bg-white rounded-[2rem] shadow-sm border border-gray-100 flex flex-col overflow-hidden min-h-[400px]">
+                <div className={`
+                            bg-white flex flex-col overflow-hidden
+                            lg:flex-1 lg:max-w-md lg:rounded-[2rem] lg:shadow-sm lg:border lg:border-gray-100 lg:flex lg:relative lg:min-h-[400px]
+                            ${selectedInvitationId
+                        ? 'fixed inset-0 z-50 animate-slide-in-right'
+                        : 'hidden lg:flex'
+                    }
+                        `}>
                     {selectedInvitationId ? (
                         <>
                             <div className="p-6 border-b border-gray-100 bg-gray-50/30">
+                                {/* MOBILE BACK BUTTON */}
+                                <button
+                                    onClick={() => setSelectedInvitationId(null)}
+                                    className="lg:hidden flex items-center gap-2 text-gray-400 hover:text-boda-text mb-6 transition"
+                                >
+                                    <ChevronLeft size={20} />
+                                    <span className="text-xs font-bold uppercase tracking-widest">Volver</span>
+                                </button>
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex-1 mr-4">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Nombre del Sobre</span>
