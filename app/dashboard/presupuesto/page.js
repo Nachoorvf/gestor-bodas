@@ -1,18 +1,20 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { auth, db } from '../../../firebase/config';
+import { db } from '../../../firebase/config';
 import { doc, getDoc, collection, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, getDocs } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../../../context/AuthContext';
 import Card from '../../../components/ui/Card';
 
 export default function PresupuestoPage() {
     const router = useRouter();
+    const { user, userData, loading: authLoading } = useAuth();
     const [loading, setLoading] = useState(true);
     const [weddingId, setWeddingId] = useState(null);
     const [expenses, setExpenses] = useState([]);
 
     // GUEST STATS
-    const [confirmedCount, setConfirmedCount] = useState(0);
+    const [guestStats, setGuestStats] = useState({ total: 0, confirmed: 0, declined: 0, projected: 0 });
 
     // MODAL STATE
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -29,18 +31,15 @@ export default function PresupuestoPage() {
     const categories = ['Lugar', 'Comida', 'Música', 'Foto/Video', 'Ropa', 'Decoración', 'Otros'];
 
     useEffect(() => {
-        const fetchUserData = async () => {
-            auth.onAuthStateChanged(async (user) => {
-                if (!user) { router.push('/login'); return; }
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
-                if (userDoc.exists()) {
-                    setWeddingId(userDoc.data().weddingId);
-                }
+        if (!authLoading) {
+            if (!user) {
+                router.push('/login');
+            } else if (userData?.weddingId) {
+                setWeddingId(userData.weddingId);
                 setLoading(false);
-            });
-        };
-        fetchUserData();
-    }, [router]);
+            }
+        }
+    }, [user, userData, authLoading, router]);
 
     useEffect(() => {
         if (!weddingId) return;
@@ -51,12 +50,17 @@ export default function PresupuestoPage() {
             setExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
-        // 2. Listen to Guests (for confirmed count)
-        // Optimization: We could just get count(). Using snapshot for realtime updates.
+        // 2. Listen to Guests (Stats)
         const qGuests = collection(db, 'weddings', weddingId, 'guests');
         const unsubGuests = onSnapshot(qGuests, (snapshot) => {
-            const confirmed = snapshot.docs.filter(d => d.data().confirmado === true).length;
-            setConfirmedCount(confirmed);
+            const allGuests = snapshot.docs.map(d => d.data());
+            const total = allGuests.length;
+            const confirmed = allGuests.filter(g => g.confirmado === true).length;
+            const declined = allGuests.filter(g => g.confirmado === false).length;
+            // Projected = Everyone who hasn't said NO. (Confirmed + Pending)
+            const projected = total - declined;
+
+            setGuestStats({ total, confirmed, declined, projected });
         });
 
         return () => {
@@ -68,7 +72,8 @@ export default function PresupuestoPage() {
     // DYNAMIC CALCULATION
     const getEstimatedCost = (expense) => {
         if (expense.type === 'variable') {
-            return Number(expense.unitPrice || 0) * confirmedCount;
+            // Use PROJECTED count for estimation (conservative budget)
+            return Number(expense.unitPrice || 0) * guestStats.projected;
         }
         return Number(expense.estimated || 0);
     };
@@ -106,10 +111,9 @@ export default function PresupuestoPage() {
     const handleSave = async (e) => {
         e.preventDefault();
         try {
-            // If variable, we don't save 'estimated' (or we save it as cache, but UI uses dynamic)
-            // We will save 'estimated' mainly for fallback, but logic relies on unitPrice
+            // If variable, we calculate using projected
             const calculatedEstimated = formData.type === 'variable'
-                ? Number(formData.unitPrice) * confirmedCount
+                ? Number(formData.unitPrice) * guestStats.projected
                 : Number(formData.estimated);
 
             const data = {
@@ -158,10 +162,16 @@ export default function PresupuestoPage() {
             </div>
 
             {/* INFO BOX GUESTS */}
-            <div className="mb-6 flex items-center justify-end">
-                <span className="text-xs font-bold text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
-                    Invitados Confirmados: <strong className="text-black">{confirmedCount}</strong> (Para gastos variables)
-                </span>
+            <div className="mb-6 flex flex-wrap gap-4 items-center justify-end">
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-400 bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm">
+                    <span>Total: <strong className="text-black">{guestStats.total}</strong></span>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-full border border-green-100 shadow-sm">
+                    <span>Confirmados: <strong>{guestStats.confirmed}</strong></span>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200 shadow-sm" title="Usado para cálculo">
+                    <span>Cálculo (Estimados): <strong className="text-black">{guestStats.projected}</strong></span>
+                </div>
             </div>
 
             {/* STATS CARDS */}
@@ -300,9 +310,9 @@ export default function PresupuestoPage() {
                                         <div>
                                             <label className="text-xs font-bold text-gray-400 uppercase">Total Estimado</label>
                                             <div className="w-full p-3 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 font-mono">
-                                                {(Number(formData.unitPrice || 0) * confirmedCount).toLocaleString()}€
+                                                {(Number(formData.unitPrice || 0) * guestStats.projected).toLocaleString()}€
                                             </div>
-                                            <p className="text-[9px] text-gray-400 mt-1 text-right">x {confirmedCount} invitados</p>
+                                            <p className="text-[9px] text-gray-400 mt-1 text-right">x {guestStats.projected} invitados (Estimados)</p>
                                         </div>
                                     </>
                                 ) : (

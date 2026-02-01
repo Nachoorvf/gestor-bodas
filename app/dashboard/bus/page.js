@@ -5,6 +5,7 @@ import { doc, getDoc, updateDoc, collection, query, where, onSnapshot } from 'fi
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import DashboardSkeleton from '../../../components/loaders/DashboardSkeleton';
+import { Bus, MapPin, Clock, Users, ArrowRight, ArrowLeft, Check, Calendar } from 'lucide-react';
 
 export default function BusPage() {
     const router = useRouter();
@@ -13,7 +14,6 @@ export default function BusPage() {
 
     // Manage local loading for data fetching (since context only handles auth loading)
     const [dataLoading, setDataLoading] = useState(true);
-
     const [activeTab, setActiveTab] = useState('config'); // config | passengers
 
     // BUS CONFIG STATE
@@ -31,10 +31,14 @@ export default function BusPage() {
 
     // 1. Auth Check
     useEffect(() => {
-        if (!authLoading && !user) {
-            router.push('/login');
+        if (!authLoading) {
+            if (!user) {
+                router.push('/login');
+            } else if (userData?.weddingId) {
+                // Wait for weddingId to be set before fetching data
+            }
         }
-    }, [user, authLoading, router]);
+    }, [user, userData, authLoading, router]);
 
     // 2. Fetch Data
     useEffect(() => {
@@ -86,201 +90,191 @@ export default function BusPage() {
     if (authLoading || dataLoading) return <DashboardSkeleton />;
 
     return (
-        <div className="max-w-5xl mx-auto flex flex-col pb-20 fade-in">
-            {/* HEADER - Editorial */}
-            <div className="mb-12 border-b border-gray-100 pb-8 flex justify-between items-end">
+        <div className="max-w-6xl mx-auto flex flex-col pb-20 animate-fade-in">
+            {/* HEADER */}
+            <div className="flex justify-between items-end mb-12">
                 <div>
-                    <p className="text-gray-400 uppercase tracking-[0.2em] text-[10px] font-bold mb-3">Logística & Transporte</p>
-                    <h1 className="text-4xl md:text-5xl font-display text-boda-text leading-tight tracking-wide">
-                        Gestión de Autobuses
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Logística</span>
+                    <h1 className="text-4xl md:text-5xl font-serif text-boda-text leading-tight">
+                        Transporte
                     </h1>
                 </div>
-                <div className="hidden md:block">
-                    <span className="text-5xl">🚌</span>
-                </div>
-            </div>
-
-            {/* CONTROL CARD (MASTER TOGGLE) */}
-            <div className={`p-8 rounded-xl transition-all duration-700 mb-12 relative overflow-hidden group ${busConfig.enabled
-                ? 'bg-[#333] text-white shadow-2xl shadow-gray-300/50'
-                : 'bg-gray-50 text-gray-400 border border-gray-100'
-                }`}>
-
-                {busConfig.enabled && (
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-boda-accent/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                )}
-
-                <div className="relative z-10 flex items-center justify-between">
-                    <div>
-                        <h2 className={`font-display text-2xl md:text-3xl mb-2 ${busConfig.enabled ? 'text-white' : 'text-gray-400'}`}>
-                            Servicio de Transporte
-                        </h2>
-                        <p className={`text-xs uppercase tracking-widest ${busConfig.enabled ? 'text-boda-accent' : 'text-gray-400'}`}>
-                            {busConfig.enabled
-                                ? 'Activo — Visible en las invitaciones'
-                                : 'Inactivo — Oculto para invitados'}
-                        </p>
+                {/* GLOBAL ENABLE TOGGLE */}
+                <div
+                    onClick={toggleBus}
+                    className={`
+                        cursor-pointer group flex items-center gap-4 px-6 py-3 rounded-full border transition-all duration-300
+                        ${busConfig.enabled ? 'bg-black border-black text-white shadow-lg' : 'bg-white border-gray-200 hover:border-gray-300 text-gray-400'}
+                    `}
+                >
+                    <div className="text-right">
+                        <span className="block text-xs font-bold uppercase tracking-widest">{busConfig.enabled ? 'Servicio Activo' : 'Servicio Inactivo'}</span>
+                        <span className="text-[10px] opacity-70 block">{busConfig.enabled ? 'Visible en invitaciones' : 'Oculto para invitados'}</span>
                     </div>
-
-                    {/* CUSTOM TOGGLE SWITCH */}
-                    <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" checked={busConfig.enabled} onChange={toggleBus} />
-                        <div className={`w-14 h-8 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all duration-300 ${busConfig.enabled ? 'bg-boda-accent after:shadow-md' : 'bg-gray-200'}`}></div>
-                    </label>
+                    <div className={`w-10 h-6 rounded-full relative transition-colors ${busConfig.enabled ? 'bg-white/20' : 'bg-gray-100'}`}>
+                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-300 ${busConfig.enabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                    </div>
                 </div>
             </div>
 
-            {/* TABS - Minimalist */}
+
+            {/* TABS (Minimalist) */}
             {busConfig.enabled && (
                 <>
                     <div className="flex gap-8 border-b border-gray-100 mb-10">
                         <button
                             onClick={() => setActiveTab('config')}
                             className={`pb-4 text-xs font-bold uppercase tracking-[0.15em] transition-all relative ${activeTab === 'config'
-                                ? 'text-boda-text after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-boda-accent'
+                                ? 'text-boda-text after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black'
                                 : 'text-gray-400 hover:text-gray-600'
                                 }`}
                         >
-                            Configuración de Rutas
+                            Rutas & Horarios
                         </button>
                         <button
                             onClick={() => setActiveTab('passengers')}
                             className={`pb-4 text-xs font-bold uppercase tracking-[0.15em] transition-all relative ${activeTab === 'passengers'
-                                ? 'text-boda-text after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-boda-accent'
+                                ? 'text-boda-text after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black'
                                 : 'text-gray-400 hover:text-gray-600'
                                 }`}
                         >
-                            Lista de Pasajeros <span className="ml-2 px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[9px] align-middle">{passengers.length}</span>
+                            Lista de Pasajeros <span className="ml-2 px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-[9px] align-middle">{passengers.length}</span>
                         </button>
                     </div>
 
                     <div className="animate-fade-in-up">
-
-                        {/* CONFIG TAB */}
+                        {/* CONFIG CONFIGURATION */}
                         {activeTab === 'config' && (
-                            <div className="space-y-10">
-                                <div className="grid md:grid-cols-2 gap-8">
+                            <div className="space-y-12">
+                                <div className="grid lg:grid-cols-2 gap-8">
                                     {busConfig.routes.map((route, index) => (
-                                        <div key={route.id} className="relative bg-white p-0 shadow-xl shadow-gray-200/50 group overflow-hidden transition-transform hover:-translate-y-1 duration-500">
-                                            {/* TICKET VISUAL DESIGN */}
-                                            <div className="absolute top-0 left-0 w-2 h-full bg-boda-accent"></div>
-                                            <div className="absolute top-1/2 right-0 w-6 h-6 bg-[#FAFAFA] rounded-full translate-x-1/2 -translate-y-1/2 shadow-inner"></div>
-                                            <div className="absolute top-1/2 left-0 w-6 h-6 bg-[#FAFAFA] rounded-full -translate-x-1/2 -translate-y-1/2 shadow-inner border-r border-gray-200"></div>
-
-                                            <div className="p-8 pl-10">
-                                                <div className="flex justify-between items-start mb-6">
-                                                    <div>
-                                                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">Ruta {route.id}</span>
-                                                        <h3 className="font-display text-2xl text-boda-text">{route.name}</h3>
+                                        <div key={route.id} className="group relative bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm transition-all hover:shadow-xl hover:border-gray-200">
+                                            {/* Header */}
+                                            <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-50">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-black group-hover:text-white transition-colors duration-500">
+                                                        {route.type === 'ida' ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
                                                     </div>
-                                                    <span className="text-2xl opacity-80">{route.type === 'ida' ? '🛫' : '🛬'}</span>
+                                                    <h3 className="font-serif text-2xl text-boda-text">{route.name}</h3>
                                                 </div>
+                                            </div>
 
-                                                <div className="space-y-6">
-                                                    <div>
-                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Hora de Salida</label>
+                                            {/* Inputs */}
+                                            <div className="space-y-6">
+                                                <div className="relative">
+                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest absolute -top-2 left-0 bg-white pr-2 z-10">Hora de Salida</label>
+                                                    <div className="flex items-center gap-3 p-4 bg-gray-50/50 rounded-xl border border-transparent focus-within:bg-white focus-within:border-black focus-within:shadow-sm transition-all">
+                                                        <Clock size={16} className="text-gray-400" />
                                                         <input
                                                             type="time"
-                                                            className="w-full bg-transparent border-b border-gray-200 py-2 text-xl font-display text-boda-text focus:outline-none focus:border-boda-accent transition-colors"
+                                                            className="bg-transparent text-lg font-bold text-boda-text outline-none w-full"
                                                             value={route.time}
                                                             onChange={(e) => updateRoute(index, 'time', e.target.value)}
                                                         />
                                                     </div>
-                                                    <div>
-                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Punto de Encuentro</label>
+                                                </div>
+
+                                                <div className="relative">
+                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest absolute -top-2 left-0 bg-white pr-2 z-10">Punto de Encuentro</label>
+                                                    <div className="flex items-center gap-3 p-4 bg-gray-50/50 rounded-xl border border-transparent focus-within:bg-white focus-within:border-black focus-within:shadow-sm transition-all">
+                                                        <MapPin size={16} className="text-gray-400" />
                                                         <input
                                                             type="text"
-                                                            placeholder="Ej. Plaza Mayor..."
-                                                            className="w-full bg-transparent border-b border-gray-200 py-2 text-base font-body text-gray-600 focus:outline-none focus:border-boda-accent transition-colors placeholder-gray-300"
+                                                            placeholder="Ej. Plaza Mayor, Esquina Norte..."
+                                                            className="bg-transparent text-base text-gray-700 outline-none w-full placeholder:text-gray-300"
                                                             value={route.location}
                                                             onChange={(e) => updateRoute(index, 'location', e.target.value)}
                                                         />
                                                     </div>
                                                 </div>
                                             </div>
-
-                                            {/* Bottom decorative barcode-like lines */}
-                                            <div className="h-2 w-full bg-[repeating-linear-gradient(90deg,transparent,transparent_4px,#eee_4px,#eee_6px)] opacity-50 mb-4 ml-8"></div>
                                         </div>
                                     ))}
                                 </div>
 
-                                <div className="bg-white p-8 border border-gray-100">
-                                    <h3 className="font-display text-xl text-boda-text mb-4">Notas para los Invitados</h3>
+                                {/* NOTES SECTION */}
+                                <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm">
+                                    <h3 className="font-serif text-xl text-boda-text mb-2">Notas Adicionales</h3>
+                                    <p className="text-xs text-gray-400 mb-4 uppercase tracking-widest">Información visible para los invitados</p>
                                     <textarea
-                                        placeholder="Información adicional (paradas intermedias, recomendaciones...)"
-                                        className="w-full p-4 bg-gray-50 border border-gray-100 text-sm font-body text-gray-600 focus:outline-none focus:border-boda-accent/50 focus:bg-white transition-all h-32 resize-none"
+                                        placeholder="Escribe aquí paradas adicionales, recomendaciones o detalles importantes..."
+                                        className="w-full p-6 bg-gray-50/50 rounded-xl border border-transparent focus:bg-white focus:border-black focus:shadow-sm outline-none transition-all resize-none text-gray-600 font-light leading-relaxed"
+                                        rows={4}
                                         value={busConfig.notes}
                                         onChange={(e) => setBusConfig({ ...busConfig, notes: e.target.value })}
                                     />
                                 </div>
 
-                                <div className="flex justify-end">
+                                {/* ACTION BAR */}
+                                <div className="fixed bottom-0 left-0 w-full bg-white/80 backdrop-blur-md border-t border-gray-200 p-4 lg:p-6 flex justify-end z-40 lg:static lg:bg-transparent lg:border-none lg:p-0">
                                     <button
                                         onClick={handleSave}
-                                        className="bg-boda-text text-white px-10 py-4 font-bold text-xs uppercase tracking-widest hover:bg-black hover:shadow-xl transition-all duration-300"
+                                        className="bg-black text-white px-8 py-3 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-gray-800 hover:scale-105 transition-all shadow-xl"
                                     >
-                                        Guardar Configuración
+                                        Guardar Cambios
                                     </button>
                                 </div>
                             </div>
                         )}
 
-                        {/* PASSENGERS TAB */}
+                        {/* PASSENGERS LIST */}
                         {activeTab === 'passengers' && (
-                            <div className="bg-white border border-gray-100 shadow-sm overflow-hidden">
-                                {passengers.length === 0 ? (
-                                    <div className="p-20 text-center flex flex-col items-center">
-                                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-3xl mb-4 grayscale opacity-50">🚌</div>
-                                        <p className="text-gray-400 font-display text-xl italic">
-                                            Aún no hay reservas de asiento.
-                                        </p>
+                            <div className="space-y-6">
+                                {/* STATS SUMMARY */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="bg-black text-white p-6 rounded-2xl">
+                                        <span className="text-2xl font-serif block">{passengers.length}</span>
+                                        <span className="text-[10px] uppercase tracking-widest opacity-60">Pasajeros Totales</span>
                                     </div>
-                                ) : (
-                                    <table className="w-full text-left text-sm text-gray-600">
-                                        <thead className="bg-gray-50/50 border-b border-gray-100">
-                                            <tr>
-                                                <th className="px-8 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Pasajero</th>
-                                                <th className="px-8 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Ubicación (Mesa)</th>
-                                                <th className="px-8 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] text-right">Estado</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {passengers.map((guest) => (
-                                                <tr key={guest.id} className="hover:bg-gray-50/30 transition-colors">
-                                                    <td className="px-8 py-5 font-display text-lg text-boda-text">{guest.nombre}</td>
-                                                    <td className="px-8 py-5 font-light text-gray-500">
-                                                        {guest.tableId ? (
-                                                            <span className="flex items-center gap-2">
-                                                                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                                                                Mesa Asignada
-                                                            </span>
-                                                        ) : (
-                                                            <span className="flex items-center gap-2 text-gray-300">
-                                                                <span className="w-2 h-2 bg-gray-200 rounded-full"></span>
-                                                                Sin Mesa
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-8 py-5 text-right">
-                                                        <span className="border border-boda-text text-boda-text px-3 py-1 text-[10px] font-bold uppercase tracking-widest">
-                                                            Confirmado
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                        <tfoot className="bg-gray-50/50 border-t border-gray-100">
-                                            <tr>
-                                                <td className="px-8 py-4 font-display text-boda-text text-lg">Total Pasajeros</td>
-                                                <td colSpan="2" className="px-8 py-4 text-right font-bold text-xl font-display">{passengers.length}</td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
-                                )}
+                                </div>
+
+                                {/* TABLE */}
+                                <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+                                    {passengers.length === 0 ? (
+                                        <div className="p-20 text-center flex flex-col items-center opacity-40">
+                                            <Bus size={48} className="mb-4 text-gray-300" strokeWidth={1} />
+                                            <p className="text-gray-500 font-serif text-xl">
+                                                Aún no hay pasajeros confirmados
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-gray-50/50 border-b border-gray-100">
+                                                    <tr>
+                                                        <th className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nombre</th>
+                                                        <th className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Mesa</th>
+                                                        <th className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Confirmado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-50">
+                                                    {passengers.map((guest) => (
+                                                        <tr key={guest.id} className="hover:bg-gray-50/30 transition-colors cursor-default group">
+                                                            <td className="px-8 py-4">
+                                                                <span className="font-bold text-boda-text block">{guest.nombre}</span>
+                                                                <span className="text-xs text-gray-400">{guest.role || 'Invitado'}</span>
+                                                            </td>
+                                                            <td className="px-8 py-4">
+                                                                {guest.tableId ? (
+                                                                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded inline-block">Con Mesa</span>
+                                                                ) : (
+                                                                    <span className="text-xs text-gray-300 italic">—</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-8 py-4 text-right">
+                                                                <div className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide">
+                                                                    <Check size={10} /> Sí
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
-
                     </div>
                 </>
             )}

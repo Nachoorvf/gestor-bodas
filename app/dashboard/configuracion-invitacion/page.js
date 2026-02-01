@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../../firebase/config';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, limit, getDocs } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 export default function InvitationConfigPage() {
@@ -9,6 +9,7 @@ export default function InvitationConfigPage() {
     const [loading, setLoading] = useState(true);
     const [weddingId, setWeddingId] = useState(null);
     const [weddingData, setWeddingData] = useState(null); // Store full wedding data for preview
+    const [previewUrl, setPreviewUrl] = useState(null);
 
     // CONFIG STATE
     const [config, setConfig] = useState({
@@ -34,6 +35,16 @@ export default function InvitationConfigPage() {
                     if (wDoc.data().invitationConfig) {
                         setConfig(wDoc.data().invitationConfig);
                     }
+
+                    // FETCH A REAL INVITATION FOR PREVIEW
+                    // We need a valid ID to render the page. We'll take the first one found.
+                    const qInv = query(collection(db, 'weddings', wId, 'invitations'), limit(1));
+                    const snapInv = await getDocs(qInv);
+                    if (!snapInv.empty) {
+                        const demoId = snapInv.docs[0].id;
+                        // Construct local URL. In production this would be the full domain.
+                        setPreviewUrl(`/invitacion/${wId}/${demoId}`);
+                    }
                 }
             }
             setLoading(false);
@@ -45,6 +56,11 @@ export default function InvitationConfigPage() {
             await updateDoc(doc(db, 'weddings', weddingId), {
                 invitationConfig: config
             });
+            // Force reload iframe to see changes
+            const currentUrl = previewUrl;
+            setPreviewUrl(null);
+            setTimeout(() => setPreviewUrl(currentUrl), 100);
+
             alert('Configuración guardada correctamente');
         } catch (e) {
             console.error(e);
@@ -230,45 +246,24 @@ export default function InvitationConfigPage() {
             <div className="hidden lg:flex flex-col items-center justify-center flex-1 bg-[#F9F9F9] rounded-3xl m-4 border border-gray-100 relative">
                 <p className="absolute top-8 text-[10px] font-bold uppercase tracking-[0.3em] text-gray-300">Vista Previa en Vivo</p>
 
-                <div className="w-[340px] h-[680px] bg-white border-[12px] border-[#333] rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col">
+                <div className="w-[375px] h-[812px] bg-white border-[14px] border-[#333] rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col transform scale-90">
                     {/* CAMERA ISLAND */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 h-6 w-32 bg-[#333] rounded-b-xl z-20"></div>
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 h-7 w-40 bg-[#333] rounded-b-2xl z-20"></div>
 
-                    {/* MOCKUP CONTENT */}
-                    <div className="flex-1 overflow-y-auto bg-white scrollbar-hide relative pb-10">
-                        {/* HERO IMAGE PLACEHOLDER */}
-                        <div className="h-48 bg-gray-100 flex items-center justify-center relative">
-                            <span className="text-6xl opacity-20 filter grayscale">🌿</span>
-                            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white/90"></div>
-                        </div>
-
-                        <div className="px-6 relative z-10 -mt-12 text-center">
-                            <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-gray-50">
-                                <p className="text-[9px] uppercase tracking-[0.25em] text-[#333] mb-3 opacity-60">
-                                    {weddingData?.fecha || '12/10/2026'}
-                                </p>
-                                <h2 className="font-display text-3xl text-[#333] leading-none mb-1">
-                                    {weddingData?.novios ? weddingData.novios[0] : 'Ana'}
-                                    <span className="italic text-boda-accent mx-2 text-xl">&</span>
-                                    {weddingData?.novios ? weddingData.novios[1] : 'Luis'}
-                                </h2>
-                                <p className="text-[10px] text-gray-400 mt-4 uppercase tracking-widest">Estás invitado</p>
+                    {/* LIVE CONTENT IFRAME */}
+                    <div className="flex-1 bg-white relative">
+                        {previewUrl ? (
+                            <iframe
+                                src={previewUrl}
+                                className="w-full h-full border-none"
+                                title="Live Preview"
+                            />
+                        ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center text-gray-400">
+                                <span className="text-4xl mb-4">✨</span>
+                                <p className="text-sm font-medium">Crea al menos un invitado para generar una vista previa real.</p>
                             </div>
-
-                            {/* MODULE PREVIEWS */}
-                            <div className="mt-8 space-y-3">
-                                <MockupButton icon="📍" label="Mapa" enabled={config.location.enabled} />
-                                <MockupButton icon="📅" label="Agenda" enabled={config.timeline.enabled} />
-                                <MockupButton icon="🎁" label="Regalo" enabled={config.bank.enabled} />
-                            </div>
-
-                            {/* ACTION BUTTON MOCKUP */}
-                            <div className="mt-8">
-                                <div className="w-full py-3 bg-[#333] text-white rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg">
-                                    Confirmar Asistencia
-                                </div>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>

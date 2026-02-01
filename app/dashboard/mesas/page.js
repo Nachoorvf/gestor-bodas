@@ -376,14 +376,45 @@ export default function MesasPage() {
                 <div
                     ref={canvasRef}
                     className={`flex-1 w-full relative overflow-hidden touch-none ${activeTab === 'map' ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                    onDragOver={(e) => e.preventDefault()} // Allow drop
+                    onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
                         e.preventDefault();
-                        // Handle dropping guest on background (maybe unassign? For now do nothing to be safe)
+                    }}
+                    onClick={(e) => {
+                        // MANUAL HIT TESTING FOR VIEW MODE
+                        // Since tables are pointer-events-none in view mode, we manually check clicks to select them
+                        if (!isLayoutMode) {
+                            const rect = canvasRef.current.getBoundingClientRect();
+                            const clickX = e.clientX - rect.left;
+                            const clickY = e.clientY - rect.top;
+
+                            // Convert to World Coordinates
+                            const worldX = (clickX - pan.x) / zoom;
+                            const worldY = (clickY - pan.y) / zoom;
+
+                            // Check collision with tables (iterate reverse to hit top-most first)
+                            for (let i = tables.length - 1; i >= 0; i--) {
+                                const t = tables[i];
+                                // Check bounding box
+                                const inX = worldX >= t.position.x && worldX <= t.position.x + t.width;
+                                const inY = worldY >= t.position.y && worldY <= t.position.y + t.height;
+
+                                if (inX && inY) {
+                                    handleTableInteraction(e, 'click', t.id);
+                                    return;
+                                }
+                            }
+
+                            // If no table hit -> Deselect
+                            setSelectedTableId(null);
+                            if (window.innerWidth < 768) setActiveTab('map');
+                        }
                     }}
                     onMouseDown={(e) => {
                         // Start Panning
-                        if (e.target === canvasRef.current || e.target.className.includes('grid-pattern')) {
+                        // In view mode, EVERYTHING triggers pan because tables are invisible to pointers
+                        // In layout mode, clicking a table triggers React-Draggable, so we only pan on background
+                        if (e.target === canvasRef.current || e.target.className.includes('grid-pattern') || !isLayoutMode) {
                             const startX = e.clientX;
                             const startY = e.clientY;
                             const startPan = { ...pan };
@@ -402,20 +433,31 @@ export default function MesasPage() {
                             window.addEventListener('mousemove', onMouseMove);
                             window.addEventListener('mouseup', onMouseUp);
 
-                            // Deselect table if clicking background
-                            setSelectedTableId(null);
-                            if (window.innerWidth < 768) setActiveTab('map');
+                            // Only deselect if we clicked background explicitly in Layout Mode
+                            // In View Mode, onClick handles selection/deselection
+                            if (isLayoutMode && (e.target === canvasRef.current || e.target.className.includes('grid-pattern'))) {
+                                setSelectedTableId(null);
+                            }
                         }
                     }}
                     // Touch Panning Support
                     onTouchStart={(e) => {
-                        if (e.target === canvasRef.current || e.target.className.includes('grid-pattern')) {
+                        // Logic:
+                        // 1. If NOT in layout mode -> ALWAYS pan (dragging table does nothing so we use it to pan)
+                        // 2. If IN layout mode -> Only pan if touching background (tables need to be draggable)
+                        const isBackground = e.target === canvasRef.current || e.target.className.includes('grid-pattern');
+                        const canPan = !isLayoutMode || isBackground;
+
+                        if (canPan) {
                             const touch = e.touches[0];
                             const startX = touch.clientX;
                             const startY = touch.clientY;
                             const startPan = { ...pan };
 
                             const onTouchMove = (moveEvent) => {
+                                // Prevent browser scrolling
+                                if (moveEvent.cancelable) moveEvent.preventDefault();
+
                                 const t = moveEvent.touches[0];
                                 const dx = t.clientX - startX;
                                 const dy = t.clientY - startY;
@@ -425,10 +467,12 @@ export default function MesasPage() {
                             const onTouchEnd = () => {
                                 window.removeEventListener('touchmove', onTouchMove);
                                 window.removeEventListener('touchend', onTouchEnd);
+                                window.removeEventListener('touchcancel', onTouchEnd);
                             };
 
                             window.addEventListener('touchmove', onTouchMove, { passive: false });
                             window.addEventListener('touchend', onTouchEnd);
+                            window.addEventListener('touchcancel', onTouchEnd);
                         }
                     }}
                 >

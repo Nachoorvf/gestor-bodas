@@ -66,7 +66,7 @@ export default function VisualTable({ table, guests = [], isDragging, isSelected
                 ref={nodeRef}
                 className={`absolute flex flex-col items-center justify-center transition-colors duration-200 group
             ${isDragging ? 'z-50 opacity-90' : 'z-10'}
-            ${isLayoutMode ? 'cursor-move' : 'cursor-pointer'}
+            ${isLayoutMode ? 'cursor-move' : 'cursor-pointer pointer-events-none'}
           `}
                 style={{
                     width: width,
