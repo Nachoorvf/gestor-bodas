@@ -13,8 +13,11 @@ export default function AdminUsersTable({ users, requests = [], onDelete, onEdit
     };
 
     return (
+
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
+
+            {/* DESKTOP TABLE */}
+            <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-gray-50/50 border-b border-gray-100">
                         <tr>
@@ -86,6 +89,66 @@ export default function AdminUsersTable({ users, requests = [], onDelete, onEdit
                     </tbody>
                 </table>
             </div>
+
+            {/* MOBILE LIST */}
+            <div className="md:hidden flex flex-col divide-y divide-gray-50">
+                {users.map(u => {
+                    const status = getUserStatus(u);
+                    return (
+                        <div key={u.id} className="p-6 space-y-4">
+                            {/* Header: Avatar + Name */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-serif italic ${u.role === 'admin' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
+                                        {(u.displayName && u.displayName[0]) ? u.displayName[0].toUpperCase() : (u.email && u.email[0]) ? u.email[0].toUpperCase() : '?'}
+                                    </div>
+                                    <div>
+                                        <div className="font-serif text-lg text-boda-text">{u.displayName || 'Sin Nombre'}</div>
+                                        <div className="text-xs text-gray-400 font-light tracking-wide">{u.email}</div>
+                                    </div>
+                                </div>
+                                {u.role === 'admin' && <span className="text-[9px] font-bold px-2 py-0.5 bg-black text-white uppercase tracking-widest rounded-full">Admin</span>}
+                            </div>
+
+                            {/* Details Row */}
+                            <div className="flex items-center gap-4 text-sm">
+                                <div className="flex-1">
+                                    <span className="text-[10px] font-bold text-gray-300 uppercase block mb-1">Boda</span>
+                                    {u.weddingId ? (
+                                        <Link href={`/admin/boda/${u.weddingId}`} className="text-boda-accent font-serif italic">
+                                            Ver Boda →
+                                        </Link>
+                                    ) : (
+                                        <span className="text-gray-300">--</span>
+                                    )}
+                                </div>
+                                <div>
+                                    <span className={`text-[9px] font-bold px-2 py-1 uppercase tracking-widest border ${status.color.replace('bg-', 'bg-transparent text-').replace('text-wh', 'text-gr')}`}>
+                                        {status.label}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center justify-end gap-4 pt-2">
+                                <button
+                                    onClick={() => onEdit(u)}
+                                    className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest hover:text-black transition-colors"
+                                >
+                                    <span>✏️ Editar</span>
+                                </button>
+                                <button
+                                    onClick={() => onDelete(u)}
+                                    className="flex items-center gap-2 text-xs font-bold text-red-300 uppercase tracking-widest hover:text-red-500 transition-colors"
+                                >
+                                    <span>✕ Eliminar</span>
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
         </div>
     );
 }

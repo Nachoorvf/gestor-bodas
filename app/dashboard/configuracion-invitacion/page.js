@@ -15,6 +15,7 @@ export default function InvitationConfigPage() {
         location: { enabled: false, address: '', mapUrl: '' },
         bank: { enabled: false, iban: '', message: '' },
         timeline: { enabled: false, events: [] },
+        bus: { enabled: false }
     });
 
     // Timeline Event Input
@@ -92,117 +93,137 @@ export default function InvitationConfigPage() {
         <div className="flex flex-col lg:flex-row gap-12 h-screen max-h-[calc(100vh-100px)] overflow-hidden">
 
             {/* LEFT: EDITOR PANEL */}
-            <div className="flex-1 overflow-y-auto pr-4 pb-20 space-y-12 scrollbar-thin scrollbar-thumb-gray-200">
-                <div className="mb-4">
-                    <p className="text-gray-400 uppercase tracking-[0.2em] text-[10px] font-bold mb-3">Estudio de Diseño</p>
-                    <h1 className="text-4xl md:text-5xl font-display text-[#333] leading-tight">
-                        Personaliza tu Invitación
-                    </h1>
-                </div>
-
-                {/* MODULE: LOCATION */}
-                <div className={`p-8 rounded-xl transition-all duration-300 border ${config.location.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
-                    <div className="flex justify-between items-center mb-6">
-                        <div className="flex items-center gap-3">
-                            <span className="text-xl opacity-70">📍</span>
-                            <h3 className="font-display text-xl text-[#333]">Ubicación y Mapa</h3>
-                        </div>
-                        <Switch checked={config.location.enabled} onChange={() => toggleModule('location')} />
+            <div className="flex-1 flex flex-col min-h-0 relative">
+                <div className="flex-1 overflow-y-auto pr-4 pb-20 space-y-12 scrollbar-thin scrollbar-thumb-gray-200">
+                    <div className="mb-4">
+                        <p className="text-gray-400 uppercase tracking-[0.2em] text-[10px] font-bold mb-3">Estudio de Diseño</p>
+                        <h1 className="text-4xl md:text-5xl font-display text-[#333] leading-tight">
+                            Personaliza tu Invitación
+                        </h1>
                     </div>
-                    {config.location.enabled && (
-                        <div className="space-y-6 animate-fade-in-up">
-                            <TextInput
-                                label="Dirección del Evento"
-                                placeholder="Ej: Finca El Olivar, Ctra. Antigua..."
-                                value={config.location.address}
-                                onChange={(e) => updateModule('location', 'address', e.target.value)}
-                            />
-                            <TextInput
-                                label="Enlace Google Maps"
-                                placeholder="https://maps.google.com/..."
-                                value={config.location.mapUrl}
-                                onChange={(e) => updateModule('location', 'mapUrl', e.target.value)}
-                            />
-                        </div>
-                    )}
-                </div>
 
-                {/* MODULE: TIMELINE */}
-                <div className={`p-8 rounded-xl transition-all duration-300 border ${config.timeline.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
-                    <div className="flex justify-between items-center mb-6">
-                        <div className="flex items-center gap-3">
-                            <span className="text-xl opacity-70">📅</span>
-                            <h3 className="font-display text-xl text-[#333]">Agenda (Timeline)</h3>
-                        </div>
-                        <Switch checked={config.timeline.enabled} onChange={() => toggleModule('timeline')} />
-                    </div>
-                    {config.timeline.enabled && (
-                        <div className="space-y-6 animate-fade-in-up">
-                            <div className="flex gap-4 items-end">
-                                <div className="w-32">
-                                    <TextInput label="Hora" type="time" value={newEvent.time} onChange={e => setNewEvent({ ...newEvent, time: e.target.value })} />
-                                </div>
-                                <div className="flex-1">
-                                    <TextInput label="Evento" placeholder="Ej: Ceremonia" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} />
-                                </div>
-                                <button onClick={addEvent} className="h-[42px] px-4 bg-[#333] text-white rounded-lg hover:bg-black transition text-xl flex items-center justify-center mb-[1px]">+</button>
+                    {/* MODULE: LOCATION */}
+                    <div className={`p-8 rounded-xl transition-all duration-300 border ${config.location.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xl opacity-70">📍</span>
+                                <h3 className="font-display text-xl text-[#333]">Ubicación y Mapa</h3>
                             </div>
-
-                            <div className="space-y-2 pt-2">
-                                {config.timeline.events?.map((ev, i) => (
-                                    <div key={i} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                        <div className="flex items-center gap-4">
-                                            <span className="font-bold font-display text-[#333]">{ev.time}</span>
-                                            <span className="text-sm text-gray-600 uppercase tracking-wider">{ev.title}</span>
-                                        </div>
-                                        <button onClick={() => removeEvent(i)} className="text-gray-300 hover:text-red-400 transition">×</button>
-                                    </div>
-                                ))}
-                                {(!config.timeline.events || config.timeline.events.length === 0) && (
-                                    <p className="text-xs text-center text-gray-400 italic py-2">Añade eventos para crear la agenda.</p>
-                                )}
-                            </div>
+                            <Switch checked={config.location.enabled} onChange={() => toggleModule('location')} />
                         </div>
-                    )}
-                </div>
-
-                {/* MODULE: BANK / GIFT */}
-                <div className={`p-8 rounded-xl transition-all duration-300 border ${config.bank.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
-                    <div className="flex justify-between items-center mb-6">
-                        <div className="flex items-center gap-3">
-                            <span className="text-xl opacity-70">🎁</span>
-                            <h3 className="font-display text-xl text-[#333]">Regalos / Lista</h3>
-                        </div>
-                        <Switch checked={config.bank.enabled} onChange={() => toggleModule('bank')} />
-                    </div>
-                    {config.bank.enabled && (
-                        <div className="space-y-6 animate-fade-in-up">
-                            <div>
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Mensaje Agradecimiento</label>
-                                <textarea
-                                    placeholder="Vuestra presencia es nuestro mejor regalo..."
-                                    className="w-full p-3 bg-transparent border-b border-gray-200 focus:border-[#333] outline-none transition text-sm font-serif h-24 resize-none placeholder-gray-300"
-                                    value={config.bank.message}
-                                    onChange={(e) => updateModule('bank', 'message', e.target.value)}
+                        {config.location.enabled && (
+                            <div className="space-y-6 animate-fade-in-up">
+                                <TextInput
+                                    label="Dirección del Evento"
+                                    placeholder="Ej: Finca El Olivar, Ctra. Antigua..."
+                                    value={config.location.address}
+                                    onChange={(e) => updateModule('location', 'address', e.target.value)}
+                                />
+                                <TextInput
+                                    label="Enlace Google Maps"
+                                    placeholder="https://maps.google.com/..."
+                                    value={config.location.mapUrl}
+                                    onChange={(e) => updateModule('location', 'mapUrl', e.target.value)}
                                 />
                             </div>
-                            <TextInput
-                                label="IBAN / Cuenta"
-                                placeholder="ESXX XXXX..."
-                                value={config.bank.iban}
-                                onChange={(e) => updateModule('bank', 'iban', e.target.value)}
-                            />
+                        )}
+                    </div>
+
+                    {/* MODULE: TIMELINE */}
+                    <div className={`p-8 rounded-xl transition-all duration-300 border ${config.timeline.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xl opacity-70">📅</span>
+                                <h3 className="font-display text-xl text-[#333]">Agenda (Timeline)</h3>
+                            </div>
+                            <Switch checked={config.timeline.enabled} onChange={() => toggleModule('timeline')} />
                         </div>
-                    )}
+                        {config.timeline.enabled && (
+                            <div className="space-y-6 animate-fade-in-up">
+                                <div className="flex gap-4 items-end">
+                                    <div className="w-32">
+                                        <TextInput label="Hora" type="time" value={newEvent.time} onChange={e => setNewEvent({ ...newEvent, time: e.target.value })} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <TextInput label="Evento" placeholder="Ej: Ceremonia" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} />
+                                    </div>
+                                    <button onClick={addEvent} className="h-[42px] px-4 bg-[#333] text-white rounded-lg hover:bg-black transition text-xl flex items-center justify-center mb-[1px]">+</button>
+                                </div>
+
+                                <div className="space-y-2 pt-2">
+                                    {config.timeline.events?.map((ev, i) => (
+                                        <div key={i} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                            <div className="flex items-center gap-4">
+                                                <span className="font-bold font-display text-[#333]">{ev.time}</span>
+                                                <span className="text-sm text-gray-600 uppercase tracking-wider">{ev.title}</span>
+                                            </div>
+                                            <button onClick={() => removeEvent(i)} className="text-gray-300 hover:text-red-400 transition">×</button>
+                                        </div>
+                                    ))}
+                                    {(!config.timeline.events || config.timeline.events.length === 0) && (
+                                        <p className="text-xs text-center text-gray-400 italic py-2">Añade eventos para crear la agenda.</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+
+                    {/* MODULE: BANK / GIFT */}
+                    <div className={`p-8 rounded-xl transition-all duration-300 border ${config.bank.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xl opacity-70">🎁</span>
+                                <h3 className="font-display text-xl text-[#333]">Regalos / Lista</h3>
+                            </div>
+                            <Switch checked={config.bank.enabled} onChange={() => toggleModule('bank')} />
+                        </div>
+                        {config.bank.enabled && (
+                            <div className="space-y-6 animate-fade-in-up">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Mensaje Agradecimiento</label>
+                                    <textarea
+                                        placeholder="Vuestra presencia es nuestro mejor regalo..."
+                                        className="w-full p-3 bg-transparent border-b border-gray-200 focus:border-[#333] outline-none transition text-sm font-serif h-24 resize-none placeholder-gray-300"
+                                        value={config.bank.message}
+                                        onChange={(e) => updateModule('bank', 'message', e.target.value)}
+                                    />
+                                </div>
+                                <TextInput
+                                    label="IBAN / Cuenta"
+                                    placeholder="ESXX XXXX..."
+                                    value={config.bank.iban}
+                                    onChange={(e) => updateModule('bank', 'iban', e.target.value)}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* MODULE: BUS SERVICE */}
+                    <div className={`p-8 rounded-xl transition-all duration-300 border ${config.bus?.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xl opacity-70">🚌</span>
+                                <h3 className="font-display text-xl text-[#333]">Servicio de Autobús</h3>
+                            </div>
+                            <Switch checked={config.bus?.enabled || false} onChange={() => toggleModule('bus')} />
+                        </div>
+                        {config.bus?.enabled && (
+                            <div className="animate-fade-in-up text-sm text-gray-500 italic">
+                                Al activar esta opción, los invitados verán una casilla para confirmar si necesitan transporte.
+                            </div>
+                        )}
+                    </div>
+
+
                 </div>
 
-                <div className="sticky bottom-0 pb-6 pt-4 bg-white/80 backdrop-blur-md border-t border-gray-100 z-10">
+                <div className="pt-4 pb-6 bg-white border-t border-gray-100 z-10 sticky bottom-0">
                     <button onClick={handleSave} className="w-full py-4 bg-[#333] text-white font-bold text-xs uppercase tracking-[0.2em] rounded-lg shadow-xl hover:bg-black hover:scale-[1.01] transition-all duration-300">
                         Guardar y Publicar
                     </button>
                     <p className="text-center text-[10px] text-gray-400 mt-3">Los cambios se aplican instantáneamente en la invitación web.</p>
                 </div>
-
             </div>
 
             {/* RIGHT: LIVE PREVIEW (IPHONE MOCKUP) */}

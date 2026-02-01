@@ -9,8 +9,9 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function DashboardLayout({ children }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const { userData } = useAuth();
+    const { userData, stopImpersonation } = useAuth();
     const isAdmin = userData?.role === 'admin';
+    const isImpersonating = userData?.isImpersonating;
     const pathname = usePathname();
     const router = useRouter();
 
@@ -29,7 +30,7 @@ export default function DashboardLayout({ children }) {
     ];
 
     return (
-        <div className="min-h-screen bg-boda-bg font-body selection:bg-boda-accent selection:text-white">
+        <div className="min-h-screen bg-boda-bg font-body selection:bg-boda-accent selection:text-white pb-20 md:pb-0">
 
             {/* TOP NAVIGATION BAR */}
             <header className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-xl border-b border-gray-100 transition-all duration-300">
@@ -70,7 +71,7 @@ export default function DashboardLayout({ children }) {
 
                     {/* 3. ACTIONS & MOBILE TOGGLE */}
                     <div className="flex items-center gap-6">
-                        {isAdmin && (
+                        {isAdmin && !isImpersonating && (
                             <button
                                 onClick={() => router.push('/admin')}
                                 className="hidden md:flex items-center gap-2 px-6 py-2.5 text-[10px] uppercase font-bold tracking-widest text-white bg-boda-text hover:bg-black transition-all shadow-lg hover:shadow-xl"
@@ -122,6 +123,21 @@ export default function DashboardLayout({ children }) {
                     </div>
                 )}
             </header>
+
+            {/* IMPERSONATION BANNER */}
+            {isImpersonating && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] animate-bounce-in">
+                    <div className="bg-red-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4">
+                        <span className="text-xs font-bold uppercase tracking-wider">👁️ Vista Modo Novios</span>
+                        <button
+                            onClick={stopImpersonation}
+                            className="bg-white text-red-500 px-4 py-1.5 rounded-full text-[10px] font-black uppercase hover:bg-red-50 transition"
+                        >
+                            Salir
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* MAIN CONTENT */}
             <main className="pt-28 pb-12 px-4 md:px-8 max-w-7xl mx-auto min-h-screen animate-fade-in">

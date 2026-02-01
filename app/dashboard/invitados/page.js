@@ -1,395 +1,752 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { db } from '../../../firebase/config';
-import { doc, getDoc, updateDoc, onSnapshot, query, orderBy, collection, addDoc, deleteDoc } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot, query, orderBy, collection, addDoc, deleteDoc, writeBatch, getDoc, arrayUnion } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
-import GuestRow from '../../../components/admin/GuestRow';
+import { Search, Mail, Phone, Users, Check, X, Clock, Bus, Plus, Trash2, Edit2, Link, MessageCircle } from 'lucide-react';
 
 export default function InvitadosPage() {
     const router = useRouter();
     const { user, userData, loading: authLoading } = useAuth();
 
     // DATA STATE
+    const [invitations, setInvitations] = useState([]);
     const [guests, setGuests] = useState([]);
-    const [availableGroups, setAvailableGroups] = useState([]);
+    const [guestGroups, setGuestGroups] = useState([]); // Custom groups
 
-    // ADD GUEST FORM
-    const [nuevoInvitado, setNuevoInvitado] = useState('');
-    const [nuevoTelefono, setNuevoTelefono] = useState('');
-    const [nuevoGrupo, setNuevoGrupo] = useState(''); // Default empty/null
+    // EDIT GUEST STATE
+    const [editingGuest, setEditingGuest] = useState(null);
 
     // UI SEARCH/VIEW
     const [searchTerm, setSearchTerm] = useState('');
-    const [viewMode, setViewMode] = useState('list'); // 'list' | 'grouped'
-    const [isContactSupported, setIsContactSupported] = useState(false);
+    const [viewMode, setViewMode] = useState('invitations'); // 'invitations' (Sobres), 'guests' (Todos), 'tags' (Etiquetas)
 
-    // MODALS
-    const [editingGuest, setEditingGuest] = useState(null);
-    const [tempData, setTempData] = useState({}); // For editing guest
-    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false); // For managing groups
-    const [newGroupInput, setNewGroupInput] = useState(''); // For adding new group
+    // CREATE MODAL STATE
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [newGuestData, setNewGuestData] = useState({
+        name: '',
+        phone: '',
+        isGroup: false,
+        groupName: ''
+    });
+
+    // EDIT/DETAILS STATE
+    const [selectedInvitation, setSelectedInvitation] = useState(null);
+    const [selectedInvitationId, setSelectedInvitationId] = useState(null);
+    const [newMemberName, setNewMemberName] = useState('');
+    const [editingEnvelopeName, setEditingEnvelopeName] = useState(false);
+    const [tempEnvelopeName, setTempEnvelopeName] = useState('');
 
     // 1. AUTH & INIT
     useEffect(() => {
-        setIsContactSupported('contacts' in navigator && 'ContactsManager' in window);
         if (!authLoading && !user) router.push('/login');
     }, [user, authLoading, router]);
 
     const weddingId = userData?.weddingId;
 
-    // 2. FETCH GROUPS & GUESTS
+    // 2. FETCH DATA & MERGE GROUPS
     useEffect(() => {
         if (!weddingId) return;
 
-        // A. Fetch Wedding Data (Groups) - Realtime listener to keep sync
-        const unsubWedding = onSnapshot(doc(db, 'weddings', weddingId), (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                // If no groups defined yet, we could set defaults or empty
-                setAvailableGroups(data.groups || ['Familia', 'Amigos', 'Trabajo']);
+        const qInv = query(collection(db, 'weddings', weddingId, 'invitations'), orderBy('createdAt', 'desc'));
+        const unsubInv = onSnapshot(qInv, (snap) => {
+            setInvitations(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
+
+        const qGuests = query(collection(db, 'weddings', weddingId, 'guests'));
+        const unsubGuests = onSnapshot(qGuests, async (snap) => {
+            const guestsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setGuests(guestsData);
+
+            // SYNC GROUPS: Merge saved config + existing tags in use
+            try {
+                const docRef = doc(db, 'weddings', weddingId);
+                const docSnap = await getDoc(docRef);
+
+                const savedGroups = (docSnap.exists() && docSnap.data().guestGroups) ? docSnap.data().guestGroups : [];
+                const defaultGroups = ['Familia Novia', 'Familia Novio', 'Amigos', 'Trabajo'];
+                const usedTags = [...new Set(guestsData.map(g => g.role).filter(r => r && r !== 'invitado'))];
+
+                // Combine unique values
+                const allGroups = [...new Set([...defaultGroups, ...savedGroups, ...usedTags])].sort();
+                setGuestGroups(allGroups);
+            } catch (e) {
+                console.error("Error syncing groups:", e);
             }
         });
 
-        // B. Fetch Guests
-        const q = query(collection(db, 'weddings', weddingId, 'guests'), orderBy('creadoEn', 'desc'));
-        const unsubGuests = onSnapshot(q, (snapshot) => {
-            setGuests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-
-        return () => {
-            unsubWedding();
-            unsubGuests();
-        };
+        return () => { unsubInv(); unsubGuests(); };
     }, [weddingId]);
 
-    // -- GROUP MANAGEMENT LOGIC --
-    const handleAddGroup = async (e) => {
+    // 1. UNIFIED CREATE (Guest + Wrapper Invitation)
+    const handleCreateUnified = async (e) => {
         e.preventDefault();
-        if (!newGroupInput.trim()) return;
-        const newGroups = [...availableGroups, newGroupInput.trim()];
+        if (!newGuestData.name.trim()) return;
 
         try {
-            await updateDoc(doc(db, 'weddings', weddingId), { groups: newGroups });
-            setNewGroupInput('');
+            const batch = writeBatch(db);
+            const invRef = doc(collection(db, 'weddings', weddingId, 'invitations'));
+
+            // Determine Envelope Name
+            let envelopeName = "";
+            if (newGuestData.isGroup) {
+                if (newGuestData.groupName.trim()) {
+                    envelopeName = newGuestData.groupName;
+                } else {
+                    const parts = newGuestData.name.trim().split(' ');
+                    const surname = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+                    envelopeName = `Familia ${surname} `;
+                }
+            } else {
+                // USER REQUEST: Use exact guest name for individual invitations
+                envelopeName = newGuestData.name;
+            }
+
+            // Create Invitation Doc
+            batch.set(invRef, {
+                name: envelopeName,
+                createdAt: new Date().toISOString(),
+                isGroup: newGuestData.isGroup
+            });
+
+            // Create Guest Doc
+            const guestRef = doc(collection(db, 'weddings', weddingId, 'guests'));
+            batch.set(guestRef, {
+                nombre: newGuestData.name,
+                telefono: newGuestData.phone,
+                invitationId: invRef.id,
+                group: envelopeName,
+                confirmado: null,
+                bus: false,
+                role: 'invitado', // Default tag
+                creadoEn: new Date().toISOString()
+            });
+
+            await batch.commit();
+
+            // Reset & Close
+            setNewGuestData({ name: '', phone: '', isGroup: false, groupName: '' });
+            setIsCreateModalOpen(false);
+
+            // If it was a group, auto-select it to add more members immediately
+            if (newGuestData.isGroup) {
+                setSelectedInvitationId(invRef.id);
+                // We mock the object since state update might lag slightly
+                setSelectedInvitation({ id: invRef.id, name: envelopeName });
+            }
+
+        } catch (error) {
+            console.error("Error creating:", error);
+            alert("Error al crear invitado");
+        }
+    };
+
+    // 2. ADD MEMBER TO EXISTING INVITATION
+    const handleAddMember = async (e) => {
+        e.preventDefault();
+        if (!newMemberName.trim() || !selectedInvitationId) return;
+
+        try {
+            await addDoc(collection(db, 'weddings', weddingId, 'guests'), {
+                nombre: newMemberName,
+                invitationId: selectedInvitationId,
+                group: selectedInvitation?.name || '',
+                confirmado: null,
+                bus: false,
+                role: 'invitado', // Default tag
+                creadoEn: new Date().toISOString()
+            });
+            setNewMemberName('');
         } catch (error) {
             console.error(error);
-            alert("Error al añadir grupo");
+            alert("Error al añadir miembro");
         }
     };
 
-    const handleDeleteGroup = async (groupToDelete) => {
-        if (!confirm(`¿Borrar el grupo "${groupToDelete}"? Los invitados en este grupo mantendrán el dato, pero el grupo desaparecerá de la lista.`)) return;
-        const newGroups = availableGroups.filter(g => g !== groupToDelete);
+    // 3. RENAME ENVELOPE (Update Invitation Name)
+    const handleUpdateEnvelopeName = async () => {
+        if (!tempEnvelopeName.trim() || !selectedInvitationId) return;
 
         try {
-            await updateDoc(doc(db, 'weddings', weddingId), { groups: newGroups });
+            const batch = writeBatch(db);
+
+            // 1. Update Invitation Doc
+            const invRef = doc(db, 'weddings', weddingId, 'invitations', selectedInvitationId);
+            batch.update(invRef, { name: tempEnvelopeName });
+
+            // 2. Update all Linked Guests
+            const linkedGuests = guests.filter(g => g.invitationId === selectedInvitationId);
+            linkedGuests.forEach(g => {
+                const guestRef = doc(db, 'weddings', weddingId, 'guests', g.id);
+                batch.update(guestRef, { group: tempEnvelopeName });
+            });
+
+            await batch.commit();
+
+            // Update local selection to reflect change immediately
+            setSelectedInvitation(prev => ({ ...prev, name: tempEnvelopeName }));
+            setEditingEnvelopeName(false);
         } catch (error) {
-            alert("Error al borrar grupo");
+            console.error("Error renaming:", error);
+            alert("Error al renombrar");
         }
     };
 
-    // -- GUEST ACTIONS --
-    const handleImportContact = async () => {
+    // 4. DELETE
+    const handleDeleteInvitation = async (inv) => {
+        if (!confirm(`¿Eliminar "${inv.name}" y sus miembros ? `)) return;
         try {
-            const hits = await navigator.contacts.select(['name', 'tel'], { multiple: false });
-            if (hits.length) {
-                setNuevoInvitado(hits[0].name[0]);
-                setNuevoTelefono(hits[0].tel[0].replace(/\s/g, ''));
+            const batch = writeBatch(db);
+            batch.delete(doc(db, 'weddings', weddingId, 'invitations', inv.id));
+            const linkedGuests = guests.filter(g => g.invitationId === inv.id);
+            linkedGuests.forEach(g => {
+                batch.delete(doc(db, 'weddings', weddingId, 'guests', g.id));
+            });
+            await batch.commit();
+            if (selectedInvitationId === inv.id) {
+                setSelectedInvitationId(null);
+                setSelectedInvitation(null);
             }
-        } catch (e) { /* ignore */ }
+        } catch (error) { console.error(error); }
     };
 
-    const handleAddGuest = async (e) => {
+    const handleDeleteMember = async (guestId) => {
+        if (!confirm("¿Borrar este invitado?")) return;
+        await deleteDoc(doc(db, 'weddings', weddingId, 'guests', guestId));
+    };
+
+    const handleUpdateGuest = async (e) => {
         e.preventDefault();
-        if (!nuevoInvitado.trim()) return;
+        if (!editingGuest) return;
 
-        await addDoc(collection(db, 'weddings', weddingId, 'guests'), {
-            nombre: nuevoInvitado,
-            telefono: nuevoTelefono,
-            group: nuevoGrupo || null, // Ensure null if empty string
-            confirmado: null,
-            bus: false,
-            creadoEn: new Date().toISOString()
-        });
-        setNuevoInvitado('');
-        setNuevoTelefono('');
-        setNuevoGrupo('');
-    };
-
-    const sendWhatsApp = (e, guestId, nombre, telefono) => {
-        e.stopPropagation();
-        const url = `${window.location.origin}/invitacion/${weddingId}/${guestId}`;
-        const message = `Hola ${nombre}! Me encantaría que vinieras a mi boda. Confirma tu asistencia aquí: ${url}`;
-        const waUrl = `https://wa.me/${telefono?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
-        window.open(waUrl, '_blank');
-    };
-
-    const saveGuestChanges = async () => {
         try {
-            const docRef = doc(db, 'weddings', weddingId, 'guests', editingGuest.id);
-            await updateDoc(docRef, {
-                confirmado: tempData.confirmado,
-                bus: tempData.bus,
-                telefono: tempData.telefono,
-                group: tempData.group || null
+            await updateDoc(doc(db, 'weddings', weddingId, 'guests', editingGuest.id), {
+                nombre: editingGuest.nombre || '',
+                telefono: editingGuest.telefono || '',
+                role: editingGuest.role || 'invitado',
+                confirmado: editingGuest.confirmado === undefined ? null : editingGuest.confirmado,
+                bus: editingGuest.bus || false
             });
             setEditingGuest(null);
         } catch (error) {
-            alert("Error al guardar");
+            console.error(error);
+            alert("Error al actualizar invitado");
         }
     };
 
-    const handleDeleteGuest = async () => {
-        if (!confirm("¿Borrar invitado?")) return;
-        await deleteDoc(doc(db, 'weddings', weddingId, 'guests', editingGuest.id));
-        setEditingGuest(null);
+    // HELPERS
+    const getInvitationLink = (invId) => {
+        if (typeof window === 'undefined') return '';
+        return `${window.location.origin}/invitacion/${weddingId}/${invId}`;
     };
 
-    // -- RENDER HELPERS --
-    const filteredGuests = guests.filter(g => g.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+    const copyLink = (invId) => {
+        navigator.clipboard.writeText(getInvitationLink(invId));
+        alert("Enlace copiado");
+    };
 
-    // STATS
-    const totalCount = guests.length;
-    const confirmedCount = guests.filter(g => g.confirmado === true).length;
-    const pendingCount = guests.filter(g => g.confirmado === null).length;
+    const handleAddGroup = async (newGroup) => {
+        if (!newGroup) return;
+        try {
+            await updateDoc(doc(db, 'weddings', weddingId), {
+                guestGroups: arrayUnion(newGroup)
+            });
+            setGuestGroups(prev => [...prev, newGroup]);
+        } catch (error) {
+            console.error("Error adding group:", error);
+            alert("Error al guardar el grupo");
+        }
+    };
+
+    const sendWhatsApp = (invId, phone) => {
+        const url = getInvitationLink(invId);
+        const text = `¡Hola! Aquí tienes la invitación para la boda: ${url}`;
+        const target = phone ? `https://wa.me/${phone.replace(/\s+/g, '')}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(target, '_blank');
+    }
+
+    const handleSelectGuestFromList = (guest) => {
+        // Select the invitation
+        setSelectedInvitationId(guest.invitationId);
+        const inv = invitations.find(i => i.id === guest.invitationId);
+        if (inv) setSelectedInvitation(inv);
+        setEditingEnvelopeName(false);
+    };
+
+    const getGroupedGuests = () => {
+        const filtered = guests.filter(g => g.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+        return filtered.reduce((groups, guest) => {
+            const key = guest.role || 'Sin Etiqueta';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(guest);
+            return groups;
+        }, {});
+    };
+
+    // -- RENDER --
+    const filteredInvitations = invitations.filter(inv => inv.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    // Filtered Guest List for "Guests" Mode
+    const filteredGuests = guests
+        .filter(g => g.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+    // Stats
+    const totalGuests = guests.length;
+    const confirmedGuests = guests.filter(g => g.confirmado === true).length;
 
     if (authLoading) return <div className="p-8 text-center text-[#333]">Cargando...</div>;
 
     return (
-        <div className="max-w-6xl mx-auto space-y-8 pb-20">
+        <div className="max-w-6xl mx-auto space-y-8 pb-20 h-full flex flex-col">
 
             {/* HEADER */}
-            <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-gray-100 pb-6">
+            <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-gray-100 pb-6 shrink-0 md:bg-white md:p-6 md:rounded-[2rem] md:shadow-sm md:border-gray-100">
                 <div>
-                    <h1 className="text-4xl font-display text-[#333] mb-2">Lista de Invitados</h1>
-                    <div className="flex gap-4 text-sm font-sans text-gray-400">
-                        <span>Total: <b className="text-[#333]">{totalCount}</b></span>
-                        <span>Confirmados: <b className="text-green-600">{confirmedCount}</b></span>
-                        <span>Pendientes: <b className="text-orange-400">{pendingCount}</b></span>
+                    <h1 className="text-4xl font-display text-[#333] mb-2">Mis Invitaciones</h1>
+                    <div className="flex flex-wrap gap-4 text-sm font-sans text-gray-400">
+                        <span className="bg-gray-50 px-3 py-1 rounded-full text-[#333]">Sobres: <b>{invitations.length}</b></span>
+                        <span className="bg-gray-50 px-3 py-1 rounded-full text-[#333]">Personas: <b>{totalGuests}</b></span>
+                        <span className="bg-green-50 px-3 py-1 rounded-full text-green-700">Confirmados: <b>{confirmedGuests}</b></span>
                     </div>
                 </div>
 
-                <div className="flex gap-3 w-full md:w-auto">
-                    {/* SEARCH */}
-                    <div className="relative flex-1 md:w-64">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
-                        <input
-                            type="text" placeholder="Buscar..."
-                            className="bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl pl-10 pr-4 py-2.5 w-full outline-none transition font-sans"
-                            value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-
-                    {/* VIEW TOGGLE */}
-                    <div className="flex bg-gray-50 p-1 rounded-xl">
-                        <button onClick={() => setViewMode('list')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition uppercase tracking-wider ${viewMode === 'list' ? 'bg-white shadow text-[#333]' : 'text-gray-400'}`}>Lista</button>
-                        <button onClick={() => setViewMode('grouped')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition uppercase tracking-wider ${viewMode === 'grouped' ? 'bg-white shadow text-[#333]' : 'text-gray-400'}`}>Grupos</button>
-                    </div>
-                </div>
-            </div>
-
-            {/* QUICK ADD + MANAGE GROUPS */}
-            <div className="bg-white p-6 rounded-[2rem] shadow-xl shadow-gray-100/50 border border-gray-50 flex flex-col xl:flex-row gap-6 items-start xl:items-center">
-
-                {/* ADD FORM */}
-                <form onSubmit={handleAddGuest} className="flex-1 flex flex-col md:flex-row gap-3 w-full">
-                    <div className="flex-1 min-w-[200px]">
-                        <input
-                            type="text" placeholder="Nombre del invitado..."
-                            className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl px-4 py-3 outline-none transition font-sans font-medium"
-                            value={nuevoInvitado} onChange={e => setNuevoInvitado(e.target.value)}
-                        />
-                    </div>
-                    <div className="w-full md:w-48 relative">
-                        <select
-                            className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl px-4 py-3 outline-none transition appearance-none text-sm text-gray-600 cursor-pointer"
-                            value={nuevoGrupo} onChange={e => setNuevoGrupo(e.target.value)}
-                        >
-                            <option value="">Sin Grupo (Ninguno)</option>
-                            {availableGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                        </select>
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-xs">▼</div>
-                    </div>
-                    <div className="w-full md:w-40">
-                        <input
-                            type="tel" placeholder="Teléfono"
-                            className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl px-4 py-3 outline-none transition font-sans"
-                            value={nuevoTelefono} onChange={e => setNuevoTelefono(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="flex gap-2 w-full md:w-auto">
-                        {isContactSupported && (
-                            <button type="button" onClick={handleImportContact} className="bg-blue-50 text-blue-600 px-4 rounded-xl hover:bg-blue-100 transition text-xl" title="Importar">📒</button>
-                        )}
-                        <button type="submit" className="flex-1 md:flex-none bg-[#333] text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-black transition shadow-lg shadow-gray-200">
-                            Añadir
-                        </button>
-                    </div>
-                </form>
-
-                {/* MANAGE GROUPS BTN */}
                 <button
-                    onClick={() => setIsGroupModalOpen(true)}
-                    className="text-xs font-bold text-gray-400 uppercase tracking-widest border-b border-gray-200 hover:text-[#333] hover:border-[#333] transition-colors pb-1 self-end xl:self-center shrink-0"
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="bg-[#333] text-white px-8 py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-black transition shadow-lg flex items-center gap-2"
                 >
-                    Gestionar Grupos
+                    <Plus size={16} /> Crear Invitado
                 </button>
             </div>
 
-            {/* GUEST LIST */}
-            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden min-h-[400px]">
-                {guests.length === 0 ? (
-                    <div className="text-center py-20 opacity-50">
-                        <p className="text-6xl mb-4 grayscale">🌿</p>
-                        <p className="font-serif text-xl text-[#333]">Añade tus primeros invitados</p>
-                    </div>
-                ) : (
-                    <div className="divide-y divide-gray-50">
-                        {
-                            viewMode === 'list' ? (
-                                filteredGuests.length > 0 ? (
-                                    filteredGuests.map(g => (
-                                        <GuestRow key={g.id} guest={g} onClick={() => { setTempData({ ...g }); setEditingGuest(g); }} waAction={(e) => sendWhatsApp(e, g.id, g.nombre, g.telefono)} />
-                                    ))
-                                ) : <div className="p-10 text-center text-gray-400">Sin resultados</div>
-                            ) : (
-                                // GROUPED VIEW
-                                (() => {
-                                    const grouped = filteredGuests.reduce((acc, guest) => {
-                                        const group = guest.group || 'Sin Grupo';
-                                        if (!acc[group]) acc[group] = [];
-                                        acc[group].push(guest);
-                                        return acc;
-                                    }, {});
-                                    // Make sure "Sin Grupo" is last or first? Last usually better.
-
-                                    return Object.entries(grouped).map(([groupName, groupGuests]) => (
-                                        <div key={groupName}>
-                                            <div className="bg-gray-50/50 px-6 py-4 flex justify-between items-center border-y border-gray-100/50">
-                                                <h3 className="font-bold text-[#333] uppercase tracking-[0.2em] text-xs font-sans">{groupName}</h3>
-                                                <span className="bg-white text-gray-400 text-[10px] px-2 py-1 rounded-full font-bold shadow-sm border border-gray-100">{groupGuests.length}</span>
-                                            </div>
-                                            {groupGuests.map(g => (
-                                                <GuestRow key={g.id} guest={g} onClick={() => { setTempData({ ...g }); setEditingGuest(g); }} waAction={(e) => sendWhatsApp(e, g.id, g.nombre, g.telefono)} />
-                                            ))}
-                                        </div>
-                                    ));
-                                })()
-                            )
-                        }
-                    </div>
-                )}
+            {/* SEARCH */}
+            <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                    type="text" placeholder="Buscar por nombre, familia..."
+                    className="bg-white border border-gray-100 shadow-sm focus:border-gray-200 rounded-xl pl-12 pr-4 py-4 w-full outline-none transition font-sans text-lg"
+                    value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                />
             </div>
 
-            {/* EDIT GUEST MODAL */}
-            {editingGuest && (
-                <div className="fixed inset-0 bg-[#333]/40 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 md:p-10 relative">
-                        <button onClick={() => setEditingGuest(null)} className="absolute top-8 right-8 text-gray-400 hover:text-[#333] text-2xl transition">×</button>
+            {/* MAIN CONTENT SPLIT */}
+            <div className="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
 
-                        <div className="mb-8">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Editando</span>
-                            <h2 className="text-4xl font-display text-[#333] mt-1">{editingGuest.nombre}</h2>
-                        </div>
+                {/* LEFT: INVITATIONS LIST */}
+                <div className="flex-1 flex flex-col bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden min-h-[400px]">
+                    <div className="p-4 bg-gray-50/50 border-b border-gray-100 flex flex-col gap-3">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Listado</span>
 
-                        <div className="space-y-6">
-                            {/* STATUS */}
-                            <div className="flex bg-gray-50 p-1.5 rounded-2xl">
-                                <StatusBtn active={tempData.confirmado === true} onClick={() => setTempData({ ...tempData, confirmado: true })} label="Asistirá" color="bg-white text-green-700 shadow-sm" />
-                                <StatusBtn active={tempData.confirmado === false} onClick={() => setTempData({ ...tempData, confirmado: false, bus: false })} label="No irá" color="bg-white text-red-700 shadow-sm" />
-                                <StatusBtn active={tempData.confirmado === null} onClick={() => setTempData({ ...tempData, confirmado: null, bus: false })} label="?" color="bg-white text-gray-600 shadow-sm" />
-                            </div>
-
-                            <div className="grid md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Teléfono</label>
-                                    <input
-                                        type="text" className="w-full bg-gray-50 border-0 rounded-xl px-4 py-3 font-sans text-[#333] outline-none focus:ring-1 focus:ring-gray-200"
-                                        value={tempData.telefono || ''} onChange={e => setTempData({ ...tempData, telefono: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Grupo</label>
-                                    <div className="relative">
-                                        <select
-                                            className="w-full bg-gray-50 border-0 rounded-xl px-4 py-3 font-sans text-[#333] outline-none focus:ring-1 focus:ring-gray-200 appearance-none cursor-pointer"
-                                            value={tempData.group || ''}
-                                            onChange={e => setTempData({ ...tempData, group: e.target.value })}
-                                        >
-                                            <option value="">Sin Grupo</option>
-                                            {availableGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                                        </select>
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-xs">▼</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <label className="flex items-center justify-between p-4 border border-gray-100 rounded-2xl cursor-pointer hover:bg-gray-50 transition">
-                                <span className="font-bold text-[#333] text-sm">Necesita Autobús</span>
-                                <input
-                                    type="checkbox"
-                                    className="w-5 h-5 accent-[#333]"
-                                    checked={tempData.bus || false}
-                                    disabled={!tempData.confirmado}
-                                    onChange={e => setTempData({ ...tempData, bus: e.target.checked })}
-                                />
-                            </label>
-
-                            <div className="flex justify-between items-center pt-6 border-t border-gray-50">
-                                <button onClick={handleDeleteGuest} className="text-red-400 text-xs font-bold uppercase tracking-widest hover:text-red-600 transition">Eliminar Invitado</button>
-                                <button onClick={saveGuestChanges} className="bg-[#333] text-white px-8 py-3 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-black transition shadow-lg">Guardar</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* MANAGE GROUPS MODAL */}
-            {isGroupModalOpen && (
-                <div className="fixed inset-0 bg-[#333]/40 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl p-8 relative">
-                        <button onClick={() => setIsGroupModalOpen(false)} className="absolute top-6 right-6 text-gray-400 hover:text-[#333] text-xl transition">×</button>
-
-                        <h3 className="text-2xl font-display text-[#333] mb-6">Gestionar Grupos</h3>
-
-                        {/* LIST */}
-                        <div className="space-y-2 mb-6 max-h-[40vh] overflow-y-auto pr-2">
-                            {availableGroups.length === 0 && <p className="text-gray-400 text-sm italic">No hay grupos creados.</p>}
-                            {availableGroups.map(g => (
-                                <div key={g} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl group hover:bg-gray-100 transition">
-                                    <span className="font-sans font-medium text-[#333]">{g}</span>
-                                    <button onClick={() => handleDeleteGroup(g)} className="text-gray-300 hover:text-red-500 transition px-2">✕</button>
-                                </div>
+                        {/* VIEW MODE TOGGLE */}
+                        <div className="flex bg-gray-200 p-1 rounded-xl">
+                            {[
+                                { id: 'invitations', label: 'Sobres' },
+                                { id: 'guests', label: 'Invitados' },
+                                { id: 'tags', label: 'Grupos' }
+                            ].map(mode => (
+                                <button
+                                    key={mode.id}
+                                    onClick={() => setViewMode(mode.id)}
+                                    className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition ${viewMode === mode.id ? 'bg-white text-[#333] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    {mode.label}
+                                </button>
                             ))}
                         </div>
+                    </div>
 
-                        {/* ADD */}
-                        <form onSubmit={handleAddGroup} className="flex gap-2">
-                            <input
-                                type="text" placeholder="Nuevo grupo..."
-                                className="flex-1 bg-gray-50 border-0 rounded-xl px-4 py-2 font-sans text-sm focus:ring-1 focus:ring-[#333] outline-none"
-                                value={newGroupInput} onChange={e => setNewGroupInput(e.target.value)}
-                            />
-                            <button type="submit" className="bg-[#333] text-white w-10 h-10 rounded-xl flex items-center justify-center hover:bg-black transition text-xl">+</button>
+                    <div className="overflow-y-auto flex-1 p-2 space-y-1">
+
+                        {/* MODE: INVITATIONS (DEFAULT) */}
+                        {viewMode === 'invitations' && (
+                            <>
+                                {filteredInvitations.length === 0 && <p className="text-center text-sm text-gray-400 py-20">No hay invitaciones creadas</p>}
+                                {filteredInvitations.map(inv => {
+                                    const invGuests = guests.filter(g => g.invitationId === inv.id);
+                                    const confirmedCount = invGuests.filter(g => g.confirmado).length;
+                                    const isSelected = selectedInvitationId === inv.id;
+                                    const leadGuest = invGuests[0]; // Usually the first one created
+
+                                    return (
+                                        <div
+                                            key={inv.id}
+                                            onClick={() => {
+                                                setSelectedInvitationId(inv.id);
+                                                setSelectedInvitation(inv);
+                                                setEditingEnvelopeName(false); // Reset edit mode
+                                            }}
+                                            className={`p-4 rounded-xl cursor-pointer transition border border-transparent group ${isSelected ? 'bg-gray-50 border-gray-200 shadow-inner' : 'hover:bg-gray-50'}`}
+                                        >
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    {/* Envelope Name */}
+                                                    <h3 className={`font-serif text-lg leading-tight ${isSelected ? 'text-[#333]' : 'text-gray-700'}`}>{inv.name}</h3>
+
+                                                    {/* Members Preview */}
+                                                    <div className="mt-1 flex flex-wrap gap-1">
+                                                        {invGuests.map(g => (
+                                                            <span key={g.id} className="text-[10px] bg-white border border-gray-100 px-2 py-0.5 rounded text-gray-500">{g.nombre}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Quick Actions (visible on hover or select) */}
+                                                <div className={`flex gap-2 transition-opacity ${isSelected || 'md:opacity-0 group-hover:opacity-100'}`}>
+                                                    <button onClick={(e) => { e.stopPropagation(); copyLink(inv.id); }} className="p-2 text-gray-400 hover:text-[#333] bg-white rounded-full border border-gray-100 shadow-sm" title="Copiar Enlace"><Link size={14} /></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); sendWhatsApp(inv.id, leadGuest?.telefono); }} className="p-2 text-green-500 hover:text-green-600 bg-white rounded-full border border-gray-100 shadow-sm" title="Enviar WhatsApp"><MessageCircle size={14} /></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </>
+                        )}
+
+                        {/* MODE: GUESTS (FLATTENED) */}
+                        {viewMode === 'guests' && (
+                            <>
+                                {filteredGuests.length === 0 && <p className="text-center text-sm text-gray-400 py-20">No se encontraron invitados</p>}
+                                {filteredGuests.map(guest => (
+                                    <div
+                                        key={guest.id}
+                                        onClick={() => handleSelectGuestFromList(guest)}
+                                        className={`p-3 rounded-xl cursor-pointer transition border border-transparent flex items-center justify-between ${selectedInvitationId === guest.invitationId ? 'bg-gray-50 border-gray-200 shadow-inner' : 'hover:bg-gray-50'}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${guest.confirmado ? 'bg-green-100 text-green-700' : (guest.confirmado === false ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-400')}`}>
+                                                {guest.confirmado ? <Check size={14} /> : (guest.confirmado === false ? <X size={14} /> : <Clock size={14} />)}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-[#333] text-sm">{guest.nombre}</p>
+                                                <p className="text-[10px] text-gray-400">{guest.group || 'Sin Sobre'}</p>
+                                            </div>
+                                        </div>
+                                        {guest.role && <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{guest.role}</span>}
+                                    </div>
+                                ))}
+                            </>
+                        )}
+
+                        {/* MODE: TAGS (GROUPED) */}
+                        {viewMode === 'tags' && (
+                            <>
+                                {Object.entries(getGroupedGuests()).map(([groupName, groupGuests]) => (
+                                    <div key={groupName} className="mb-4 bg-gray-50/50 rounded-xl overflow-hidden border border-gray-100">
+                                        <div className="px-3 py-2 bg-gray-100 border-b border-gray-100 flex justify-between items-center">
+                                            <span className="font-bold text-xs text-gray-600 uppercase tracking-wide">{groupName}</span>
+                                            <span className="text-[10px] bg-white text-gray-400 px-1.5 py-0.5 rounded border border-gray-200">{groupGuests.length}</span>
+                                        </div>
+                                        <div className="p-1 space-y-1">
+                                            {groupGuests.map(guest => (
+                                                <div
+                                                    key={guest.id}
+                                                    onClick={() => handleSelectGuestFromList(guest)}
+                                                    className={`p-2 rounded-lg cursor-pointer transition flex items-center justify-between ${selectedInvitationId === guest.invitationId ? 'bg-white shadow-sm border border-gray-100' : 'hover:bg-white/50'}`}
+                                                >
+                                                    <span className="text-sm font-medium text-gray-700">{guest.nombre}</span>
+                                                    <div className={`w-2 h-2 rounded-full ${guest.confirmado ? 'bg-green-500' : (guest.confirmado === false ? 'bg-red-500' : 'bg-gray-300')}`}></div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                                {Object.keys(getGroupedGuests()).length === 0 && <p className="text-center text-sm text-gray-400 py-20">No hay grupos</p>}
+                            </>
+                        )}
+
+                    </div>
+                </div>
+
+                {/* RIGHT: DETAILS PANEL */}
+                <div className="flex-1 lg:max-w-md bg-white rounded-[2rem] shadow-sm border border-gray-100 flex flex-col overflow-hidden min-h-[400px]">
+                    {selectedInvitationId ? (
+                        <>
+                            <div className="p-6 border-b border-gray-100 bg-gray-50/30">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex-1 mr-4">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Nombre del Sobre</span>
+                                        {editingEnvelopeName ? (
+                                            <div className="flex gap-2">
+                                                <input
+                                                    autoFocus
+                                                    className="bg-white border border-gray-200 px-2 py-1 rounded text-xl font-display outline-none w-full"
+                                                    value={tempEnvelopeName}
+                                                    onChange={e => setTempEnvelopeName(e.target.value)}
+                                                    onBlur={handleUpdateEnvelopeName}
+                                                    onKeyDown={e => e.key === 'Enter' && handleUpdateEnvelopeName()}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="group flex items-center gap-2 cursor-pointer" onClick={() => { setTempEnvelopeName(selectedInvitation.name); setEditingEnvelopeName(true); }}>
+                                                <h2 className="text-3xl font-display text-[#333] leading-none break-words">{selectedInvitation?.name}</h2>
+                                                <Edit2 size={16} className="text-gray-300 group-hover:text-gray-500 opacity-0 group-hover:opacity-100 transition shrink-0" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button onClick={() => handleDeleteInvitation(selectedInvitation)} className="text-red-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition"><Trash2 size={18} /></button>
+                                </div>
+
+                                <a href={`/invitacion/${weddingId}/${selectedInvitationId}`} target="_blank" className="inline-flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-full text-xs font-bold text-[#333] hover:bg-gray-50 transition">
+                                    <Link size={12} /> Ver invitación pública
+                                </a>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-6">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Contenido del Sobre</h3>
+                                <div className="space-y-3 mb-6">
+                                    {guests.filter(g => g.invitationId === selectedInvitationId).map(member => (
+                                        <div
+                                            key={member.id}
+                                            onClick={() => setEditingGuest(member)}
+                                            className="flex justify-between items-center p-4 bg-white rounded-xl border border-gray-100 shadow-sm animate-fade-in-up cursor-pointer hover:border-[#333] hover:shadow-md transition group"
+                                        >
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-[#333] text-lg">{member.nombre}</span>
+                                                    {member.confirmado === true && <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><Check size={10} /> Viene</span>}
+                                                    {member.confirmado === false && <span className="text-[10px] bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><X size={10} /> No viene</span>}
+
+                                                    {/* Bus Indicator in List */}
+                                                    {member.bus && <span className="text-gray-400"><Bus size={14} /></span>}
+                                                </div>
+                                                <div className="flex gap-2 text-xs text-gray-400 mt-1">
+                                                    {member.telefono && <span className="flex items-center gap-1"><Phone size={10} /> {member.telefono}</span>}
+                                                    {member.role && <span className="bg-gray-100 px-2 rounded text-gray-500 font-medium">{member.role}</span>}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Edit2 size={14} className="text-[#333] opacity-0 group-hover:opacity-100 transition" />
+                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteMember(member.id); }} className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition"><X size={16} /></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="border-t border-gray-100 pt-6">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Añadir otra persona al sobre</label>
+                                    <form onSubmit={handleAddMember} className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Nombre del acompañante..."
+                                            className="flex-1 bg-gray-50 border border-transparent focus:bg-white focus:border-gray-200 rounded-xl px-4 py-3 text-sm outline-none transition"
+                                            value={newMemberName}
+                                            onChange={e => setNewMemberName(e.target.value)}
+                                        />
+                                        <button
+                                            type="submit"
+                                            disabled={!newMemberName.trim()}
+                                            className="bg-[#333] text-white px-6 rounded-xl font-bold hover:bg-black transition disabled:opacity-50"
+                                        >
+                                            Añadir
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center p-10 text-center opacity-40">
+                            <Mail size={48} className="mb-4 text-gray-300" />
+                            <p className="font-serif text-xl">Selecciona un sobre</p>
+                            <p className="text-sm mt-2">Para ver quién va dentro</p>
+                        </div>
+                    )}
+                </div>
+
+            </div>
+
+            {/* CREATE MODAL */}
+            {isCreateModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-scale-up relative">
+                        <button onClick={() => setIsCreateModalOpen(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-600"><X size={20} /></button>
+
+                        <h2 className="font-display text-3xl text-[#333] mb-1">Nuevo Invitado</h2>
+                        <p className="text-gray-400 text-sm mb-6">Primero añade los datos principales.</p>
+
+                        <form onSubmit={handleCreateUnified} className="space-y-5">
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Nombre Completo</label>
+                                <input
+                                    autoFocus
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-lg font-medium outline-none focus:border-[#333] transition"
+                                    placeholder="Ej: Juan Pérez"
+                                    value={newGuestData.name}
+                                    onChange={e => setNewGuestData({ ...newGuestData, name: e.target.value })}
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Teléfono (Opcional)</label>
+                                <input
+                                    type="tel"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-lg outline-none focus:border-[#333] transition"
+                                    placeholder="600 000 000"
+                                    value={newGuestData.phone}
+                                    onChange={e => setNewGuestData({ ...newGuestData, phone: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="pt-2">
+                                <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition select-none">
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${newGuestData.isGroup ? 'bg-[#333] border-[#333]' : 'bg-white border-gray-300'}`}>
+                                        {newGuestData.isGroup && <Check size={12} className="text-white" />}
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        className="hidden"
+                                        checked={newGuestData.isGroup}
+                                        onChange={e => setNewGuestData({ ...newGuestData, isGroup: e.target.checked })}
+                                    />
+                                    <div className="flex-1">
+                                        <span className="block font-bold text-[#333] text-sm">Invitación Grupal (Sobre)</span>
+                                        <span className="block text-xs text-gray-400">Activa esto para familias o parejas.</span>
+                                    </div>
+                                </label>
+                            </div>
+
+                            {newGuestData.isGroup && (
+                                <div className="animate-fade-in-up">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Nombre del Sobre (Opcional)</label>
+                                    <input
+                                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#333] transition placeholder-gray-300"
+                                        placeholder={`Ej: Familia ${newGuestData.name.split(' ')[0] || '...'}`}
+                                        value={newGuestData.groupName}
+                                        onChange={e => setNewGuestData({ ...newGuestData, groupName: e.target.value })}
+                                    />
+                                </div>
+                            )}
+
+                            <button type="submit" disabled={!newGuestData.name.trim()} className="w-full bg-[#333] text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-black transition shadow-lg disabled:opacity-50 mt-4">
+                                Crear Invitado
+                            </button>
                         </form>
                     </div>
                 </div>
             )}
 
-        </div>
-    );
-}
+            {/* EDIT GUEST MODAL */}
+            {editingGuest && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-scale-up relative">
+                        <button onClick={() => setEditingGuest(null)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-600"><X size={20} /></button>
 
-// Sub-component for buttons
-function StatusBtn({ active, onClick, label, color }) {
-    return (
-        <button
-            onClick={onClick}
-            className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${active ? color : 'text-gray-400 hover:text-gray-500'}`}
-        >
-            {label}
-        </button>
+                        <h2 className="font-display text-2xl text-[#333] mb-6">Editar Invitado</h2>
+
+                        <form onSubmit={handleUpdateGuest} className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Nombre</label>
+                                <input
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-medium outline-none focus:border-[#333] transition"
+                                    value={editingGuest.nombre}
+                                    onChange={e => setEditingGuest({ ...editingGuest, nombre: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Teléfono</label>
+                                <input
+                                    type="tel"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-[#333] transition"
+                                    value={editingGuest.telefono || ''}
+                                    onChange={e => setEditingGuest({ ...editingGuest, telefono: e.target.value })}
+                                    placeholder="Sin teléfono"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Grupo / Etiqueta</label>
+                                <div className="flex gap-2">
+                                    <select
+                                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-[#333] transition cursor-pointer appearance-none"
+                                        value={editingGuest.role || ''}
+                                        onChange={e => setEditingGuest({ ...editingGuest, role: e.target.value })}
+                                    >
+                                        <option value="">Sin Etiqueta</option>
+                                        {guestGroups.map(group => (
+                                            <option key={group} value={group}>{group}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const newGroup = prompt("Nombre del nuevo grupo (ej: Amigos del Master):");
+                                            if (newGroup && newGroup.trim()) handleAddGroup(newGroup.trim());
+                                        }}
+                                        className="px-4 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-lg text-[#333] transition flex items-center justify-center"
+                                        title="Crear nuevo grupo"
+                                    >
+                                        <Plus size={20} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Asistencia</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingGuest({ ...editingGuest, confirmado: null })}
+                                            className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl border transition ${editingGuest.confirmado === null
+                                                ? 'bg-gray-100 border-gray-300 text-gray-600'
+                                                : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            <Clock size={16} />
+                                            <span className="text-[10px] font-bold uppercase">Pendiente</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingGuest({ ...editingGuest, confirmado: true })}
+                                            className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl border transition ${editingGuest.confirmado === true
+                                                ? 'bg-green-50 border-green-200 text-green-700'
+                                                : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            <Check size={16} />
+                                            <span className="text-[10px] font-bold uppercase">Sí</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingGuest({ ...editingGuest, confirmado: false })}
+                                            className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl border transition ${editingGuest.confirmado === false
+                                                ? 'bg-red-50 border-red-200 text-red-600'
+                                                : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            <X size={16} />
+                                            <span className="text-[10px] font-bold uppercase">No</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="col-span-2">
+                                    <label className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition ${editingGuest.bus ? 'bg-[#333] border-[#333] text-white' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                                        <input
+                                            type="checkbox"
+                                            className="hidden"
+                                            checked={editingGuest.bus || false}
+                                            onChange={e => setEditingGuest({ ...editingGuest, bus: e.target.checked })}
+                                        />
+                                        <Bus size={18} />
+                                        <div className="flex-1">
+                                            <span className="text-xs font-bold uppercase tracking-widest block">Autobús</span>
+                                            <span className="text-[10px] opacity-70 block leading-none">Necesita transporte</span>
+                                        </div>
+                                        {editingGuest.bus && <Check size={16} />}
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="pt-4 flex gap-3">
+                                <button type="button" onClick={() => setEditingGuest(null)} className="flex-1 py-3 text-gray-500 font-bold text-xs uppercase tracking-widest hover:bg-gray-50 rounded-xl transition">Cancelar</button>
+                                <button type="submit" className="flex-1 bg-[#333] text-white py-3 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-black transition shadow-lg">Guardar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+
+        </div>
     );
 }

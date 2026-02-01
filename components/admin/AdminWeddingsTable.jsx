@@ -1,6 +1,10 @@
 import Link from 'next/link';
+import { useAuth } from '../../context/AuthContext';
+import { Eye, Trash2 } from 'lucide-react';
 
 export default function AdminWeddingsTable({ weddings, onDelete, loading }) {
+    const { impersonateWedding } = useAuth();
+
     return (
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
@@ -41,15 +45,22 @@ export default function AdminWeddingsTable({ weddings, onDelete, loading }) {
                                             href={`/admin/boda/${boda.id}`}
                                             className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-white hover:border-boda-accent hover:text-boda-accent transition hover:shadow-md"
                                         >
-                                            Supervisar
+                                            Gestión
                                         </Link>
+                                        <button
+                                            onClick={() => impersonateWedding(boda.id)}
+                                            className="px-4 py-2 bg-boda-text text-white rounded-xl text-xs font-bold hover:bg-black transition shadow-md flex items-center gap-2"
+                                            title="Entrar como Novios"
+                                        >
+                                            <Eye size={14} /> Entrar
+                                        </button>
                                         <button
                                             onClick={() => onDelete(boda.id, boda.adminId, boda.novios?.join(' & '))}
                                             disabled={loading}
                                             className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-400 rounded-full hover:bg-red-500 hover:text-white transition"
                                             title="Eliminar Boda"
                                         >
-                                            ✖
+                                            <Trash2 size={14} />
                                         </button>
                                     </div>
                                 </td>

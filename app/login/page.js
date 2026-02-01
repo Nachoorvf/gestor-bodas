@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { signInWithEmailAndPassword, signInWithPopup, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../../firebase/config';
 import { useRouter } from 'next/navigation';
@@ -56,6 +56,7 @@ export default function LoginPage() {
     }
 
     try {
+      await setPersistence(auth, browserLocalPersistence);
       const userCredential = await signInWithEmailAndPassword(auth, emailCompleto, password);
       const user = userCredential.user;
       const docRef = doc(db, 'users', user.uid);

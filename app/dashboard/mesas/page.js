@@ -15,6 +15,27 @@ const TABLE_PRESETS = {
     square: { width: 140, height: 140, shape: 'square', seats: 8, label: 'Cuadrada (8)' }
 };
 
+const GuestCard = ({ guest, selectedGuestId, setSelectedGuestId, setActiveTab, setDraggingGuest }) => (
+    <div
+        draggable
+        onDragStart={(e) => {
+            setDraggingGuest({ guest });
+            e.dataTransfer.setData("guestId", guest.id);
+        }}
+        onClick={() => {
+            setSelectedGuestId(selectedGuestId === guest.id ? null : guest.id);
+            if (window.innerWidth < 768) setActiveTab('map');
+        }}
+        className={`
+            p-3 rounded-xl border cursor-grab active:cursor-grabbing hover:shadow-md transition-all flex items-center justify-between
+            ${selectedGuestId === guest.id ? 'bg-boda-text text-white border-boda-text' : 'bg-white border-gray-100 text-gray-600 hover:border-boda-green'}
+        `}
+    >
+        <span className="font-medium text-sm">{guest.nombre}</span>
+        <span className="text-xs opacity-50">:::</span>
+    </div>
+);
+
 export default function MesasPage() {
     const router = useRouter();
     const { user, userData, loading: authLoading } = useAuth();
@@ -31,6 +52,9 @@ export default function MesasPage() {
     const [selectedTableId, setSelectedTableId] = useState(null);
     const [selectedGuestId, setSelectedGuestId] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+
+    // NEW: GROUPING MODE
+    const [groupingMode, setGroupingMode] = useState('group'); // 'all', 'group' (envelopes), 'role' (tags)
 
     // DRAGGING STATE
     const [draggingGuest, setDraggingGuest] = useState(null); // { guest, sourceTableId }
@@ -56,6 +80,21 @@ export default function MesasPage() {
     }, [weddingId]);
 
     const unassignedGuests = guests.filter(g => !g.tableId && g.confirmado !== false).filter(g => g.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    // HELPER: Group Guests
+    const getGroupedGuests = () => {
+        if (groupingMode === 'all') return {};
+
+        return unassignedGuests.reduce((groups, guest) => {
+            let key = '';
+            if (groupingMode === 'group') key = guest.group || 'Sin Sobre';
+            if (groupingMode === 'role') key = guest.role || 'Sin Etiqueta';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(guest);
+            return groups;
+        }, {});
+    };
+
     const getGuestsForTable = (tableId) => guests.filter(g => g.tableId === tableId);
 
     // --- ACTIONS ---
@@ -151,6 +190,7 @@ export default function MesasPage() {
     // --- RENDER HELPERS ---
 
     const selectedTable = tables.find(t => t.id === selectedTableId);
+    const selectedGuest = guests.find(g => g.id === selectedGuestId);
 
     if (authLoading) return <DashboardSkeleton />;
 
@@ -164,8 +204,26 @@ export default function MesasPage() {
                 ${activeTab === 'guests' ? 'flex' : 'hidden md:flex'}
                 w-full md:w-80 bg-white rounded-3xl shadow-sm border border-gray-100 flex-col overflow-hidden z-20 shrink-0
             `}>
-                <div className="p-5 border-b border-gray-100">
-                    <h2 className="font-serif text-xl text-boda-text mb-2">Lista de Invitados</h2>
+                <div className="p-5 border-b border-gray-100 flex flex-col gap-4">
+                    <h2 className="font-serif text-xl text-boda-text">Lista de Invitados</h2>
+
+                    {/* GROUPING MODE SELECTOR */}
+                    <div className="flex bg-gray-100 p-1 rounded-xl">
+                        {[
+                            { id: 'all', label: 'Todos' },
+                            { id: 'group', label: 'Sobres' },
+                            { id: 'role', label: 'Etiquetas' }
+                        ].map(mode => (
+                            <button
+                                key={mode.id}
+                                onClick={() => setGroupingMode(mode.id)}
+                                className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition ${groupingMode === mode.id ? 'bg-white text-[#333] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                {mode.label}
+                            </button>
+                        ))}
+                    </div>
+
                     <input
                         type="text"
                         placeholder="Buscar invitado..."
@@ -183,28 +241,47 @@ export default function MesasPage() {
                         if (gId) unassignGuest(gId);
                     }}
                 >
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-2 mb-2">Sin Asignar ({unassignedGuests.length})</p>
-                    {unassignedGuests.map(guest => (
-                        <div
-                            key={guest.id}
-                            draggable
-                            onDragStart={(e) => {
-                                setDraggingGuest({ guest });
-                                e.dataTransfer.setData("guestId", guest.id);
-                            }}
-                            onClick={() => {
-                                setSelectedGuestId(selectedGuestId === guest.id ? null : guest.id);
-                                if (window.innerWidth < 768) setActiveTab('map');
-                            }}
-                            className={`
-                                p-3 rounded-xl border cursor-grab active:cursor-grabbing hover:shadow-md transition-all flex items-center justify-between
-                                ${selectedGuestId === guest.id ? 'bg-boda-text text-white border-boda-text' : 'bg-white border-gray-100 text-gray-600 hover:border-boda-green'}
-                            `}
-                        >
-                            <span className="font-medium text-sm">{guest.nombre}</span>
-                            <span className="text-xs opacity-50">:::</span>
-                        </div>
-                    ))}
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-2 mb-2">
+                        Sin Asignar ({unassignedGuests.length})
+                    </p>
+
+                    {/* RENDER LOGIC BASED ON MODE */}
+                    {groupingMode === 'all' ? (
+                        // CLASSIC LIST
+                        unassignedGuests.map(guest => (
+                            <GuestCard
+                                key={guest.id}
+                                guest={guest}
+                                selectedGuestId={selectedGuestId}
+                                setSelectedGuestId={setSelectedGuestId}
+                                setActiveTab={setActiveTab}
+                                setDraggingGuest={setDraggingGuest}
+                            />
+                        ))
+                    ) : (
+                        // GROUPED LIST
+                        Object.entries(getGroupedGuests()).map(([groupName, groupGuests]) => (
+                            <div key={groupName} className="mb-4 bg-gray-50/50 rounded-xl overflow-hidden border border-gray-100">
+                                <div className="px-3 py-2 bg-gray-100 border-b border-gray-100 flex justify-between items-center">
+                                    <span className="font-bold text-xs text-gray-600 uppercase tracking-wide">{groupName === 'undefined' ? 'Sin Grupo' : groupName}</span>
+                                    <span className="text-[10px] bg-white text-gray-400 px-1.5 py-0.5 rounded border border-gray-200">{groupGuests.length}</span>
+                                </div>
+                                <div className="p-2 space-y-1">
+                                    {groupGuests.map(guest => (
+                                        <GuestCard
+                                            key={guest.id}
+                                            guest={guest}
+                                            selectedGuestId={selectedGuestId}
+                                            setSelectedGuestId={setSelectedGuestId}
+                                            setActiveTab={setActiveTab}
+                                            setDraggingGuest={setDraggingGuest}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        ))
+                    )}
+
                     {unassignedGuests.length === 0 && (
                         <div className="py-10 text-center text-gray-400 text-sm">
                             Todo el mundo tiene sitio 🎉
@@ -218,6 +295,21 @@ export default function MesasPage() {
                 ${activeTab === 'map' ? 'flex' : 'hidden md:flex'}
                 flex-1 flex-col bg-gray-100/50 rounded-3xl border border-gray-200 overflow-hidden relative shadow-inner
             `}>
+
+                {/* MOBILE GUEST ASSIGNMENT BANNER */}
+                {selectedGuest && (
+                    <div className="absolute top-4 left-4 right-4 z-40 bg-[#333] text-white p-4 rounded-xl shadow-xl flex justify-between items-center animate-slide-in-down">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">Asignando a</p>
+                            <p className="font-medium text-lg leading-none">{selectedGuest.nombre}</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setSelectedGuestId(null)} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold">Cancelar</button>
+                            <div className="px-3 py-2 bg-white text-[#333] rounded-lg text-xs font-bold animate-pulse">Toca una mesa</div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Visual Toolbar - Only in Layout Mode */}
                 {isLayoutMode && (
                     <div className="absolute top-4 left-4 z-30 flex flex-col gap-2 animate-fade-in">
@@ -249,7 +341,8 @@ export default function MesasPage() {
                 )}
 
                 {/* LAYOUT MODE TOGGLE (Floating Bottom Center) */}
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30">
+                {/* Adjusted bottom position for mobile to avoid tab bar */}
+                <div className="absolute bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-30">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -257,7 +350,7 @@ export default function MesasPage() {
                             setSelectedTableId(null); // Deselect when switching modes
                         }}
                         className={`
-                            flex items-center gap-2 px-6 py-3 rounded-full shadow-xl font-bold text-sm transition-all transform hover:scale-105
+                            flex items-center gap-2 px-6 py-3 rounded-full shadow-xl font-bold text-sm transition-all transform hover:scale-105 select-none
                             ${isLayoutMode
                                 ? 'bg-boda-text text-white ring-4 ring-boda-text/20'
                                 : 'bg-white text-gray-600 hover:text-boda-text border border-gray-100'
@@ -425,8 +518,16 @@ export default function MesasPage() {
                                         type="number"
                                         className="w-full bg-gray-50 rounded-xl px-3 py-2 text-sm font-medium outline-none border border-gray-100"
                                         value={selectedTable.seats}
-                                        min="1" max="24"
-                                        onChange={(e) => updateTable(selectedTable.id, { seats: parseInt(e.target.value) || 1 })}
+                                        min="1" max="30"
+                                        onChange={(e) => {
+                                            let val = parseInt(e.target.value) || 1;
+                                            if (val > 30) {
+                                                val = 30;
+                                                alert("El máximo de sillas por mesa es de 30 para mantener el diseño.");
+                                            }
+                                            if (val < 1) val = 1;
+                                            updateTable(selectedTable.id, { seats: val });
+                                        }}
                                     />
                                 </div>
                             </div>

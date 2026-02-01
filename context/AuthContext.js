@@ -13,15 +13,19 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [userData, setUserData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [impersonatedWeddingId, setImpersonatedWeddingId] = useState(null);
     const router = useRouter();
     const pathname = usePathname();
 
     useEffect(() => {
+        // Load impersonation state from storage on mount
+        const storedId = localStorage.getItem('impersonatedWeddingId');
+        if (storedId) setImpersonatedWeddingId(storedId);
+
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setLoading(true);
             if (currentUser) {
                 setUser(currentUser);
-                // Fetch extra user data (role, weddingId)
                 try {
                     const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
                     if (userDoc.exists()) {
@@ -33,6 +37,8 @@ export const AuthProvider = ({ children }) => {
             } else {
                 setUser(null);
                 setUserData(null);
+                setImpersonatedWeddingId(null);
+                localStorage.removeItem('impersonatedWeddingId');
             }
             setLoading(false);
         });
@@ -40,8 +46,35 @@ export const AuthProvider = ({ children }) => {
         return () => unsubscribe();
     }, []);
 
+    // Helper to start impersonation
+    const impersonateWedding = (weddingId) => {
+        setImpersonatedWeddingId(weddingId);
+        localStorage.setItem('impersonatedWeddingId', weddingId);
+        router.push('/dashboard');
+    };
+
+    // Helper to stop impersonation
+    const stopImpersonation = () => {
+        setImpersonatedWeddingId(null);
+        localStorage.removeItem('impersonatedWeddingId');
+        router.push('/admin');
+    };
+
+    // Derived User Data with Override
+    const finalUserData = userData ? {
+        ...userData,
+        weddingId: (userData.role === 'admin' && impersonatedWeddingId) ? impersonatedWeddingId : userData.weddingId,
+        isImpersonating: !!(userData.role === 'admin' && impersonatedWeddingId)
+    } : null;
+
     return (
-        <AuthContext.Provider value={{ user, userData, loading }}>
+        <AuthContext.Provider value={{
+            user,
+            userData: finalUserData,
+            loading,
+            impersonateWedding,
+            stopImpersonation
+        }}>
             {children}
         </AuthContext.Provider>
     );
