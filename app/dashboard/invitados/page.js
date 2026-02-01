@@ -334,7 +334,10 @@ export default function InvitadosPage() {
             <div className="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
 
                 {/* LEFT: INVITATIONS LIST */}
-                <div className="flex-1 flex flex-col bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden min-h-[400px]">
+                <div className={`
+                            bg-white flex-col rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden min-h-[400px]
+                            ${selectedInvitationId ? 'hidden lg:flex lg:flex-1' : 'flex flex-1'}
+                        `}>
                     <div className="p-4 bg-gray-50/50 border-b border-gray-100 flex flex-col gap-3">
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Listado</span>
 
@@ -460,10 +463,10 @@ export default function InvitadosPage() {
 
                 {/* RIGHT: DETAILS PANEL */}
                 <div className={`
-                            bg-white flex flex-col overflow-hidden
-                            lg:flex-1 lg:max-w-md lg:rounded-[2rem] lg:shadow-sm lg:border lg:border-gray-100 lg:flex lg:relative lg:min-h-[400px]
+                            bg-white flex-col overflow-hidden
+                            lg:flex-1 lg:max-w-md lg:rounded-[2rem] lg:shadow-sm lg:border lg:border-gray-100 lg:relative lg:min-h-[400px]
                             ${selectedInvitationId
-                        ? 'fixed inset-0 z-50 animate-slide-in-right'
+                        ? 'flex w-full animate-fade-in'
                         : 'hidden lg:flex'
                     }
                         `}>
