@@ -1,66 +1,122 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { auth, db } from '../../../firebase/config';
+import { db, storage } from '../../../firebase/config';
 import { doc, getDoc, updateDoc, collection, query, limit, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../../../context/AuthContext';
+import {
+    MapPin, Calendar, Gift, Type, Image as ImageIcon, Video,
+    Clock, Images, Trash2, Plus, ChevronUp, ChevronDown,
+    Palette, Layout, Smartphone, AlignLeft, MousePointerClick, GripVertical, Eye, X
+} from 'lucide-react';
 
 export default function InvitationConfigPage() {
     const router = useRouter();
-    const [loading, setLoading] = useState(true);
+    const { user, userData, loading: authLoading } = useAuth();
+
+    // Local state
+    const [loadingData, setLoadingData] = useState(true);
     const [weddingId, setWeddingId] = useState(null);
-    const [weddingData, setWeddingData] = useState(null); // Store full wedding data for preview
+    const [weddingData, setWeddingData] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
+    const [newGalleryUrl, setNewGalleryUrl] = useState({}); // { blockId: 'url' }
+    const [showMobilePreview, setShowMobilePreview] = useState(false);
 
     // CONFIG STATE
     const [config, setConfig] = useState({
-        location: { enabled: false, address: '', mapUrl: '' },
-        bank: { enabled: false, iban: '', message: '' },
-        timeline: { enabled: false, events: [] },
-        bus: { enabled: false }
+        location: { enabled: false, address: '', mapUrl: '', title: 'Ubicación', order: 1 },
+        bank: { enabled: false, iban: '', message: '', title: 'Regalo', order: 3 },
+        timeline: { enabled: false, events: [], title: 'Agenda', order: 2 },
+        bus: { enabled: false },
+        design: {
+            primaryColor: '#C5A065', // Gold default
+            fontPair: 'serif', // serif | sans | script
+            backgroundImage: 'https://images.unsplash.com/photo-1606800052052-a08af7148866?q=80&w=2070&auto=format&fit=crop',
+            overlayOpacity: 50
+        },
+        customBlocks: [] // { id, type: 'text'|'image'|'video', content, title, order }
     });
 
     // Timeline Event Input
     const [newEvent, setNewEvent] = useState({ time: '', title: '' });
 
+    // 1. LOAD DATA
     useEffect(() => {
-        auth.onAuthStateChanged(async (user) => {
-            if (!user) { router.push('/login'); return; }
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            if (userDoc.exists()) {
-                const wId = userDoc.data().weddingId;
-                setWeddingId(wId);
-                const wDoc = await getDoc(doc(db, 'weddings', wId));
-                if (wDoc.exists()) {
-                    setWeddingData(wDoc.data());
-                    if (wDoc.data().invitationConfig) {
-                        setConfig(wDoc.data().invitationConfig);
-                    }
+        if (authLoading) return;
+        if (!user) { router.push('/login'); return; }
 
-                    // FETCH A REAL INVITATION FOR PREVIEW
-                    // We need a valid ID to render the page. We'll take the first one found.
-                    const qInv = query(collection(db, 'weddings', wId, 'invitations'), limit(1));
-                    const snapInv = await getDocs(qInv);
-                    if (!snapInv.empty) {
-                        const demoId = snapInv.docs[0].id;
-                        // Construct local URL. In production this would be the full domain.
-                        setPreviewUrl(`/invitacion/${wId}/${demoId}`);
+        const loadWedding = async () => {
+            if (userData?.weddingId) {
+                const wId = userData.weddingId;
+                setWeddingId(wId);
+
+                try {
+                    const wDoc = await getDoc(doc(db, 'weddings', wId));
+                    if (wDoc.exists()) {
+                        setWeddingData(wDoc.data());
+                        if (wDoc.data().invitationConfig) {
+                            const fetched = wDoc.data().invitationConfig;
+                            setConfig(prev => ({
+                                ...prev,
+                                ...fetched,
+                                location: { ...prev.location, ...fetched.location },
+                                timeline: { ...prev.timeline, ...fetched.timeline },
+                                bank: { ...prev.bank, ...fetched.bank },
+                                design: { ...prev.design, ...fetched.design },
+                                customBlocks: fetched.customBlocks || []
+                            }));
+                        }
+
+                        // FETCH PREVIEW INVITATION
+                        const qInv = query(collection(db, 'weddings', wId, 'invitations'), limit(1));
+                        const snapInv = await getDocs(qInv);
+                        if (!snapInv.empty) {
+                            const demoId = snapInv.docs[0].id;
+                            setPreviewUrl(`/invitacion/${wId}/${demoId}`);
+                        }
                     }
+                } catch (error) {
+                    console.error("Error loading wedding:", error);
                 }
             }
-            setLoading(false);
-        });
-    }, [router]);
+            setLoadingData(false);
+        };
+
+        loadWedding();
+    }, [user, userData, authLoading, router]);
+
+    // 2. REAL-TIME PREVIEW
+    useEffect(() => {
+        const iframe = document.querySelector('iframe');
+        if (iframe && iframe.contentWindow && previewUrl) {
+            iframe.contentWindow.postMessage({ type: 'UPDATE_CONFIG', config }, '*');
+        }
+    }, [config, previewUrl]);
+
+    // --- HELPER: UNIFIED LIST OF ITEMS ---
+    const getAllItems = () => {
+        const fixed = ['location', 'timeline', 'bank'].map(key => ({
+            id: key,
+            type: 'fixed',
+            order: config[key]?.order || 99,
+            ...config[key]
+        }));
+        const custom = (config.customBlocks || []).map(b => ({
+            ...b,
+            isCustom: true
+        }));
+        return [...fixed, ...custom].sort((a, b) => a.order - b.order);
+    };
 
     const handleSave = async () => {
         try {
             await updateDoc(doc(db, 'weddings', weddingId), {
                 invitationConfig: config
             });
-            // Force reload iframe to see changes
             const currentUrl = previewUrl;
             setPreviewUrl(null);
             setTimeout(() => setPreviewUrl(currentUrl), 100);
-
             alert('Configuración guardada correctamente');
         } catch (e) {
             console.error(e);
@@ -69,10 +125,23 @@ export default function InvitationConfigPage() {
     };
 
     const toggleModule = (module) => {
-        setConfig(prev => ({
-            ...prev,
-            [module]: { ...prev[module], enabled: !prev[module].enabled }
-        }));
+        setConfig(prev => {
+            const isDisabling = prev[module].enabled;
+            let newOrder = prev[module].order;
+
+            if (isDisabling) {
+                const all = Object.values(prev)
+                    .filter(v => v.order && typeof v.order === 'number')
+                    .map(v => v.order);
+                const max = Math.max(...all, ...(prev.customBlocks || []).map(b => b.order), 0);
+                newOrder = max + 1;
+            }
+
+            return {
+                ...prev,
+                [module]: { ...prev[module], enabled: !isDisabling, order: newOrder }
+            };
+        });
     };
 
     const updateModule = (module, field, value) => {
@@ -80,6 +149,86 @@ export default function InvitationConfigPage() {
             ...prev,
             [module]: { ...prev[module], [field]: value }
         }));
+    };
+
+    // --- CUSTOM BLOCKS LOGIC ---
+    const addBlock = (type) => {
+        const items = getAllItems();
+        const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order)) : 0;
+
+        let initialContent = '';
+        let initialTitle = '';
+
+        if (type === 'text') initialTitle = 'Nuevo Texto';
+        else if (type === 'countdown') {
+            initialTitle = 'Nuestra Boda';
+            const d = new Date();
+            d.setMonth(d.getMonth() + 6);
+            d.setMinutes(0);
+            initialContent = d.toISOString().slice(0, 16);
+        } else if (type === 'gallery') {
+            initialTitle = 'Nuestra Historia';
+            initialContent = [];
+        }
+
+        const newBlock = {
+            id: `block_${Date.now()}`,
+            type,
+            content: initialContent,
+            title: initialTitle,
+            order: maxOrder + 1,
+            enabled: true
+        };
+
+        setConfig(prev => ({
+            ...prev,
+            customBlocks: [...prev.customBlocks, newBlock]
+        }));
+    };
+
+    const updateCustomBlock = (id, field, value) => {
+        setConfig(prev => ({
+            ...prev,
+            customBlocks: prev.customBlocks.map(b => b.id === id ? { ...b, [field]: value } : b)
+        }));
+    };
+
+    const removeCustomBlock = (id) => {
+        if (!confirm("¿Borrar este bloque?")) return;
+        setConfig(prev => ({
+            ...prev,
+            customBlocks: prev.customBlocks.filter(b => b.id !== id)
+        }));
+    };
+
+    const moveItem = (id, direction) => {
+        const items = getAllItems();
+        const currentIndex = items.findIndex(i => i.id === id);
+        if (currentIndex === -1) return;
+
+        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        if (targetIndex < 0 || targetIndex >= items.length) return;
+
+        const itemA = items[currentIndex];
+        const itemB = items[targetIndex];
+
+        const newOrderA = itemB.order;
+        const newOrderB = itemA.order;
+
+        setConfig(prev => {
+            const next = { ...prev };
+            if (itemA.isCustom) {
+                next.customBlocks = next.customBlocks.map(b => b.id === itemA.id ? { ...b, order: newOrderA } : b);
+            } else {
+                next[itemA.id] = { ...next[itemA.id], order: newOrderA };
+            }
+            if (itemB.isCustom) {
+                next.customBlocks = next.customBlocks.map(b => b.id === itemB.id ? { ...b, order: newOrderB } : b);
+            } else {
+                next[itemB.id] = { ...next[itemB.id], order: newOrderB };
+            }
+            return next;
+        });
     };
 
     const addEvent = () => {
@@ -103,150 +252,426 @@ export default function InvitationConfigPage() {
         }));
     };
 
-    if (loading) return <div className="p-20 text-center font-serif text-[#333]">Cargando estudio de diseño...</div>;
+    if (loadingData) return <div className="p-20 text-center font-serif text-[#333]">Cargando estudio de diseño...</div>;
+
+    const allItems = getAllItems();
+
+    // Icon Helper
+    const getBlockIcon = (item) => {
+        if (!item.isCustom) {
+            if (item.id === 'location') return <MapPin className="w-5 h-5 text-[#C5A065]" />;
+            if (item.id === 'timeline') return <Calendar className="w-5 h-5 text-[#C5A065]" />;
+            if (item.id === 'bank') return <Gift className="w-5 h-5 text-[#C5A065]" />;
+        } else {
+            if (item.type === 'text') return <Type className="w-5 h-5 text-gray-500" />;
+            if (item.type === 'image') return <ImageIcon className="w-5 h-5 text-gray-500" />;
+            if (item.type === 'video') return <Video className="w-5 h-5 text-gray-500" />;
+            if (item.type === 'countdown') return <Clock className="w-5 h-5 text-indigo-500" />;
+            if (item.type === 'gallery') return <Images className="w-5 h-5 text-pink-500" />;
+        }
+        return <Layout className="w-5 h-5 text-gray-400" />;
+    };
 
     return (
-        <div className="flex flex-col lg:flex-row gap-12 h-screen max-h-[calc(100vh-100px)] overflow-hidden">
+        <div className="flex flex-col lg:flex-row gap-8 h-screen max-h-[calc(100vh-100px)] overflow-hidden bg-white">
 
             {/* LEFT: EDITOR PANEL */}
             <div className="flex-1 flex flex-col min-h-0 relative">
-                <div className="flex-1 overflow-y-auto pr-4 pb-20 space-y-12 scrollbar-thin scrollbar-thumb-gray-200">
-                    <div className="mb-4">
-                        <p className="text-gray-400 uppercase tracking-[0.2em] text-[10px] font-bold mb-3">Estudio de Diseño</p>
-                        <h1 className="text-4xl md:text-5xl font-display text-[#333] leading-tight">
+                <div className="flex-1 overflow-y-auto px-6 py-8 space-y-10 scrollbar-thin scrollbar-thumb-gray-200">
+
+                    {/* Header Section */}
+                    <div className="mb-2">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                <Palette className="w-4 h-4 text-[#C5A065]" />
+                                <p className="text-[#C5A065] uppercase tracking-[0.2em] text-[10px] font-bold">Estudio de Diseño</p>
+                            </div>
+                            <button
+                                onClick={() => setShowMobilePreview(true)}
+                                className="lg:hidden flex items-center gap-2 px-3 py-1.5 bg-[#333] text-white rounded-full text-xs font-bold uppercase tracking-wider shadow-md hover:bg-black transition"
+                            >
+                                <Eye size={12} /> Vista Previa
+                            </button>
+                        </div>
+                        <h1 className="text-3xl md:text-4xl font-display text-[#333] leading-tight">
                             Personaliza tu Invitación
                         </h1>
+                        <p className="text-gray-400 text-sm mt-2 font-light">Diseña cada detalle para que sea única.</p>
                     </div>
 
-                    {/* MODULE: LOCATION */}
-                    <div className={`p-8 rounded-xl transition-all duration-300 border ${config.location.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
-                        <div className="flex justify-between items-center mb-6">
-                            <div className="flex items-center gap-3">
-                                <span className="text-xl opacity-70">📍</span>
-                                <h3 className="font-display text-xl text-[#333]">Ubicación y Mapa</h3>
+                    {/* MOBILE PREVIEW MODAL */}
+                    {showMobilePreview && (
+                        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col animate-in fade-in duration-200">
+                            <div className="flex items-center justify-between p-4 text-white bg-black border-b border-gray-800">
+                                <h3 className="font-bold text-sm uppercase tracking-widest">Vista Previa</h3>
+                                <button onClick={() => setShowMobilePreview(false)} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition">
+                                    <X size={20} />
+                                </button>
                             </div>
-                            <Switch checked={config.location.enabled} onChange={() => toggleModule('location')} />
+                            <div className="flex-1 overflow-hidden relative bg-white">
+                                {previewUrl ? (
+                                    <iframe
+                                        src={previewUrl}
+                                        className="w-full h-full border-none"
+                                        title="Mobile Live Preview"
+                                    />
+                                ) : (
+                                    <div className="flex items-center justify-center h-full text-gray-400">
+                                        Cargando vista previa...
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        {config.location.enabled && (
-                            <div className="space-y-6 animate-fade-in-up">
-                                <TextInput
-                                    label="Dirección del Evento"
-                                    placeholder="Ej: Finca El Olivar, Ctra. Antigua..."
-                                    value={config.location.address}
-                                    onChange={(e) => updateModule('location', 'address', e.target.value)}
-                                />
-                                <TextInput
-                                    label="Enlace Google Maps"
-                                    placeholder="https://maps.google.com/..."
-                                    value={config.location.mapUrl}
-                                    onChange={(e) => updateModule('location', 'mapUrl', e.target.value)}
-                                />
-                            </div>
-                        )}
-                    </div>
+                    )}
 
-                    {/* MODULE: TIMELINE */}
-                    <div className={`p-8 rounded-xl transition-all duration-300 border ${config.timeline.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
-                        <div className="flex justify-between items-center mb-6">
-                            <div className="flex items-center gap-3">
-                                <span className="text-xl opacity-70">📅</span>
-                                <h3 className="font-display text-xl text-[#333]">Agenda (Timeline)</h3>
+                    {/* MODULE: DESIGN STUDIO (Level 1) */}
+                    <div className="p-6 rounded-2xl border border-gray-100 bg-white shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] hover:shadow-lg transition-all duration-300">
+                        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50">
+                            <div className="w-8 h-8 rounded-full bg-[#C5A065]/10 flex items-center justify-center">
+                                <MousePointerClick className="w-4 h-4 text-[#C5A065]" />
                             </div>
-                            <Switch checked={config.timeline.enabled} onChange={() => toggleModule('timeline')} />
+                            <h3 className="font-display text-lg text-[#333]">Estilo Global</h3>
                         </div>
-                        {config.timeline.enabled && (
-                            <div className="space-y-6 animate-fade-in-up">
-                                <div className="flex gap-4 items-end">
-                                    <div className="w-32">
-                                        <TextInput label="Hora" type="time" value={newEvent.time} onChange={e => setNewEvent({ ...newEvent, time: e.target.value })} />
+
+                        <div className="space-y-8">
+                            {/* Color Picker */}
+                            <div className="flex items-center justify-between group">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-[#333] transition-colors">Color Principal</label>
+                                <div className="flex items-center gap-3 bg-gray-50 pl-3 pr-1 py-1 rounded-full border border-gray-200">
+                                    <span className="text-xs font-mono text-gray-500 uppercase">{config.design?.primaryColor}</span>
+                                    <div className="relative w-8 h-8 rounded-full overflow-hidden shadow-sm border border-white box-content">
+                                        <input
+                                            type="color"
+                                            value={config.design?.primaryColor || '#C5A065'}
+                                            onChange={(e) => updateModule('design', 'primaryColor', e.target.value)}
+                                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] cursor-pointer p-0 border-0"
+                                        />
                                     </div>
-                                    <div className="flex-1">
-                                        <TextInput label="Evento" placeholder="Ej: Ceremonia" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} />
-                                    </div>
-                                    <button onClick={addEvent} className="h-[42px] px-4 bg-[#333] text-white rounded-lg hover:bg-black transition text-xl flex items-center justify-center mb-[1px]">+</button>
                                 </div>
+                            </div>
 
-                                <div className="space-y-2 pt-2">
-                                    {config.timeline.events?.map((ev, i) => (
-                                        <div key={i} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                            <div className="flex items-center gap-4">
-                                                <span className="font-bold font-display text-[#333]">{ev.time}</span>
-                                                <span className="text-sm text-gray-600 uppercase tracking-wider">{ev.title}</span>
-                                            </div>
-                                            <button onClick={() => removeEvent(i)} className="text-gray-300 hover:text-red-400 transition">×</button>
-                                        </div>
+                            {/* Welcome Message Input (Top) */}
+                            <TextInput
+                                label="Mensaje Superior (Ej: Estás invitado a...)"
+                                value={config.design?.welcomeMessage}
+                                onChange={(e) => updateModule('design', 'welcomeMessage', e.target.value)}
+                                placeholder="Estás invitado a la boda de"
+                                icon={<Type size={14} />}
+                            />
+
+                            {/* Celebration Quote Input */}
+                            <div className="relative">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Frase de Celebración</label>
+                                <textarea
+                                    value={config.design?.celebrationMessage || ''}
+                                    onChange={(e) => updateModule('design', 'celebrationMessage', e.target.value)}
+                                    placeholder="¡Queremos celebrar el amor con la gente que más queremos!"
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#333] focus:ring-1 focus:ring-[#333]/10 text-sm font-serif h-20 resize-none transition"
+                                />
+                            </div>
+
+                            {/* Background Image Input */}
+                            <TextInput
+                                label="Imagen de Fondo (URL)"
+                                value={config.design?.backgroundImage}
+                                onChange={(e) => updateModule('design', 'backgroundImage', e.target.value)}
+                                placeholder="https://..."
+                                icon={<ImageIcon size={14} />}
+                            />
+                            <div className="text-[10px] text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 mt-2">
+                                <p className="font-bold text-[#333] mb-1">ℹ️ Instrucciones:</p>
+                                <p>Para poner una imagen de fondo, necesitas un <strong>enlace directo (URL)</strong>. Puedes subir tu foto a un servicio como <a href="https://imgbb.com" target="_blank" className="text-blue-500 underline">ImgBB</a>, Dropbox (carpeta pública) o usar una imagen de tu web/redes sociales.</p>
+                            </div>
+
+                            {/* Typography Selector */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tipografía</label>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {[
+                                        { id: 'serif', label: 'Elegante', font: 'font-serif' },
+                                        { id: 'sans', label: 'Moderna', font: 'font-sans' },
+                                        { id: 'script', label: 'Romántica', font: 'font-script' }
+                                    ].map((font) => (
+                                        <button
+                                            key={font.id}
+                                            onClick={() => updateModule('design', 'fontPair', font.id)}
+                                            className={`py-3 px-2 rounded-xl border text-sm transition-all duration-300 ${config.design?.fontPair === font.id
+                                                ? 'border-[#333] bg-[#333] text-white shadow-md transform scale-[1.02]'
+                                                : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-300 hover:bg-white'
+                                                }`}
+                                        >
+                                            <span className={font.font}>{font.label}</span>
+                                        </button>
                                     ))}
-                                    {(!config.timeline.events || config.timeline.events.length === 0) && (
-                                        <p className="text-xs text-center text-gray-400 italic py-2">Añade eventos para crear la agenda.</p>
+                                </div>
+                            </div>
+
+                            {/* Overlay Opacity */}
+                            <div>
+                                <div className="flex justify-between mb-3">
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Intensidad del Fondo</label>
+                                    <span className="text-xs font-bold text-[#333] bg-gray-100 px-2 py-0.5 rounded-md">{config.design?.overlayOpacity || 50}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0" max="90"
+                                    value={config.design?.overlayOpacity || 50}
+                                    onChange={(e) => updateModule('design', 'overlayOpacity', parseInt(e.target.value))}
+                                    className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-[#333]"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* BLOCK TOOLBAR */}
+                    <div className="space-y-4">
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Añadir Contenido</p>
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                            <ToolbarBtn icon={<AlignLeft size={16} />} label="Texto" onClick={() => addBlock('text')} />
+                            <ToolbarBtn icon={<ImageIcon size={16} />} label="Imagen" onClick={() => addBlock('image')} />
+                            <ToolbarBtn icon={<Video size={16} />} label="Video" onClick={() => addBlock('video')} />
+                            <div className="w-[1px] bg-gray-200 mx-auto hidden sm:block"></div>
+                            <ToolbarBtn icon={<Clock size={16} />} label="Cuenta Atrás" onClick={() => addBlock('countdown')} color="text-indigo-600 bg-indigo-50 hover:bg-indigo-100" />
+                            <ToolbarBtn icon={<Images size={16} />} label="Galería" onClick={() => addBlock('gallery')} color="text-pink-600 bg-pink-50 hover:bg-pink-100" />
+                        </div>
+                    </div>
+
+                    {/* UNIFIED MODULES LIST */}
+                    <div className="space-y-6">
+                        {allItems.map((item, index) => {
+                            const isFirst = index === 0;
+                            const isLast = index === allItems.length - 1;
+                            const icon = getBlockIcon(item);
+
+                            return (
+                                <div key={item.id} className={`group relative p-6 rounded-2xl transition-all duration-300 border ${item.enabled
+                                    ? 'border-gray-200 bg-white shadow-sm hover:shadow-md'
+                                    : 'border-gray-100 bg-gray-50/50 opacity-70'
+                                    }`}>
+                                    {/* Handle Drag Indicator (Visual only for now) */}
+                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
+                                        <GripVertical size={16} />
+                                    </div>
+
+                                    {/* Header */}
+                                    <div className="flex flex-col gap-4 mb-6 pl-4">
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${item.enabled ? 'bg-gray-50' : 'bg-white'}`}>
+                                                    {icon}
+                                                </div>
+                                                {/* Renaming */}
+                                                <input
+                                                    type="text"
+                                                    value={item.title || ''}
+                                                    onChange={(e) => item.isCustom ? updateCustomBlock(item.id, 'title', e.target.value) : updateModule(item.id, 'title', e.target.value)}
+                                                    className="font-display text-lg text-[#333] bg-transparent border-transparent focus:border-gray-200 border-b outline-none transition px-1 -ml-1 placeholder-gray-400 min-w-[150px]"
+                                                    placeholder="Título del bloque"
+                                                />
+                                            </div>
+
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex flex-col gap-1">
+                                                    <button onClick={() => moveItem(item.id, 'up')} disabled={isFirst} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-[#333] disabled:opacity-20"><ChevronUp size={14} /></button>
+                                                    <button onClick={() => moveItem(item.id, 'down')} disabled={isLast} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-[#333] disabled:opacity-20"><ChevronDown size={14} /></button>
+                                                </div>
+
+                                                {/* Delete for Custom, Switch for Fixed */}
+                                                {item.isCustom ? (
+                                                    <button onClick={() => removeCustomBlock(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full text-red-300 hover:text-red-500 hover:bg-red-50 transition ml-2">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                ) : (
+                                                    <Switch checked={item.enabled} onChange={() => toggleModule(item.id)} />
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* CONTENT RENDERERS */}
+                                    {item.enabled && (
+                                        <div className="pl-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <div className="pt-6 border-t border-gray-50 space-y-6">
+
+                                                {/* --- FIXED MODULES --- */}
+                                                {!item.isCustom && item.id === 'location' && (
+                                                    <>
+                                                        <TextInput label="Dirección Completa" value={config.location.address} onChange={(e) => updateModule('location', 'address', e.target.value)} icon={<MapPin size={14} />} />
+                                                        <TextInput label="Enlace Google Maps" value={config.location.mapUrl} onChange={(e) => updateModule('location', 'mapUrl', e.target.value)} placeholder="https://maps.google.com/..." />
+                                                    </>
+                                                )}
+                                                {!item.isCustom && item.id === 'timeline' && (
+                                                    <div className="space-y-4">
+                                                        <div className="flex gap-3 items-end p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                                            <div className="w-28"><TextInput label="Hora" type="time" value={newEvent.time} onChange={e => setNewEvent({ ...newEvent, time: e.target.value })} /></div>
+                                                            <div className="flex-1"><TextInput label="Actividad" placeholder="Ej: Ceremonia" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} /></div>
+                                                            <button onClick={addEvent} className="h-[42px] w-[42px] bg-[#333] text-white rounded-lg hover:bg-black transition flex items-center justify-center shadow-md">
+                                                                <Plus size={20} />
+                                                            </button>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            {config.timeline.events?.map((ev, i) => (
+                                                                <div key={i} className="flex justify-between items-center bg-white p-3 px-4 rounded-lg border border-gray-100 shadow-sm hover:border-gray-200 transition">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <span className="font-mono text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded">{ev.time}</span>
+                                                                        <span className="font-display text-[#333]">{ev.title}</span>
+                                                                    </div>
+                                                                    <button onClick={() => removeEvent(i)} className="text-gray-300 hover:text-red-400 px-2"><Trash2 size={14} /></button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {!item.isCustom && item.id === 'bank' && (
+                                                    <div className="space-y-4">
+                                                        <div className="relative">
+                                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Mensaje de Agradecimiento</label>
+                                                            <textarea
+                                                                placeholder="Vuestro regalo es vuestra asistencia, pero si queréis tener un detalle..."
+                                                                className="w-full p-4 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:border-[#333] focus:ring-1 focus:ring-[#333]/10 text-sm font-serif h-28 resize-none transition"
+                                                                value={config.bank.message}
+                                                                onChange={(e) => updateModule('bank', 'message', e.target.value)}
+                                                            />
+                                                        </div>
+                                                        <TextInput label="Número de Cuenta (IBAN)" value={config.bank.iban} onChange={(e) => updateModule('bank', 'iban', e.target.value)} placeholder="ES00 0000..." icon={<Gift size={14} />} />
+                                                    </div>
+                                                )}
+
+                                                {/* --- CUSTOM BLOCKS --- */}
+                                                {item.isCustom && item.type === 'text' && (
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Contenido</label>
+                                                        <textarea
+                                                            value={item.content}
+                                                            onChange={(e) => updateCustomBlock(item.id, 'content', e.target.value)}
+                                                            className="w-full p-4 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#333] focus:ring-1 focus:ring-[#333]/10 min-h-[120px] text-sm font-serif shadow-inner"
+                                                            placeholder="Escribe aquí vuestra historia, una dedicatoria o cualquier información importante..."
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {item.isCustom && item.type === 'image' && (
+                                                    <div className="flex flex-col gap-4">
+                                                        <TextInput
+                                                            label="Enlace de la Imagen"
+                                                            value={item.content}
+                                                            onChange={(e) => updateCustomBlock(item.id, 'content', e.target.value)}
+                                                            placeholder="https://..."
+                                                        />
+                                                        <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 border-dashed">
+                                                            <div className="w-24 h-24 bg-white rounded-lg overflow-hidden shrink-0 border border-gray-200 flex items-center justify-center">
+                                                                {item.content ? <img src={item.content} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={24} />}
+                                                            </div>
+                                                            <div className="text-xs text-gray-500 space-y-2 flex-1">
+                                                                <p className="font-bold text-[#333]">Instrucciones:</p>
+                                                                <ul className="list-disc pl-4 space-y-1">
+                                                                    <li>Usa imágenes alojadas en Drive, Dropbox o tu propia web.</li>
+                                                                    <li>Asegúrate de que el enlace sea público y directo a la imagen.</li>
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {item.isCustom && item.type === 'video' && (
+                                                    <TextInput
+                                                        label="Enlace Embed de YouTube"
+                                                        placeholder="https://www.youtube.com/embed/VIDEO_ID"
+                                                        value={item.content}
+                                                        onChange={(e) => updateCustomBlock(item.id, 'content', e.target.value)}
+                                                        icon={<Video size={14} />}
+                                                    />
+                                                )}
+
+                                                {item.isCustom && item.type === 'countdown' && (
+                                                    <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                                                        <TextInput
+                                                            type="datetime-local"
+                                                            label="Día y Hora de la Boda"
+                                                            value={item.content}
+                                                            onChange={(e) => updateCustomBlock(item.id, 'content', e.target.value)}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {item.isCustom && item.type === 'gallery' && (
+                                                    <div className="space-y-4">
+                                                        <div className="flex flex-wrap gap-3">
+                                                            {(Array.isArray(item.content) ? item.content : []).map((imgUrl, idx) => (
+                                                                <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden group border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition">
+                                                                    <img src={imgUrl} className="w-full h-full object-cover" />
+                                                                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                const newImages = item.content.filter((_, i) => i !== idx);
+                                                                                updateCustomBlock(item.id, 'content', newImages);
+                                                                            }}
+                                                                            className="bg-white/90 text-red-500 rounded-full p-1 hover:scale-110 transition"
+                                                                        >
+                                                                            <Trash2 size={12} />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+
+                                                            {/* Add Image Input */}
+                                                            <div className="w-full mt-2">
+                                                                <div className="flex gap-2">
+                                                                    <div className="flex-1 relative">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Enlace de la foto..."
+                                                                            className="w-full pl-3 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-pink-300 focus:bg-white transition"
+                                                                            value={newGalleryUrl[item.id] || ''}
+                                                                            onChange={(e) => setNewGalleryUrl({ ...newGalleryUrl, [item.id]: e.target.value })}
+                                                                        />
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const url = newGalleryUrl[item.id];
+                                                                            if (!url) return;
+                                                                            const current = Array.isArray(item.content) ? item.content : [];
+                                                                            updateCustomBlock(item.id, 'content', [...current, url]);
+                                                                            setNewGalleryUrl({ ...newGalleryUrl, [item.id]: '' });
+                                                                        }}
+                                                                        disabled={!newGalleryUrl[item.id]}
+                                                                        className="px-4 bg-[#333] text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                                                    >
+                                                                        <Plus size={14} /> Añadir
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })}
                     </div>
-
-
-                    {/* MODULE: BANK / GIFT */}
-                    <div className={`p-8 rounded-xl transition-all duration-300 border ${config.bank.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
-                        <div className="flex justify-between items-center mb-6">
-                            <div className="flex items-center gap-3">
-                                <span className="text-xl opacity-70">🎁</span>
-                                <h3 className="font-display text-xl text-[#333]">Regalos / Lista</h3>
-                            </div>
-                            <Switch checked={config.bank.enabled} onChange={() => toggleModule('bank')} />
-                        </div>
-                        {config.bank.enabled && (
-                            <div className="space-y-6 animate-fade-in-up">
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Mensaje Agradecimiento</label>
-                                    <textarea
-                                        placeholder="Vuestra presencia es nuestro mejor regalo..."
-                                        className="w-full p-3 bg-transparent border-b border-gray-200 focus:border-[#333] outline-none transition text-sm font-serif h-24 resize-none placeholder-gray-300"
-                                        value={config.bank.message}
-                                        onChange={(e) => updateModule('bank', 'message', e.target.value)}
-                                    />
-                                </div>
-                                <TextInput
-                                    label="IBAN / Cuenta"
-                                    placeholder="ESXX XXXX..."
-                                    value={config.bank.iban}
-                                    onChange={(e) => updateModule('bank', 'iban', e.target.value)}
-                                />
-                            </div>
-                        )}
-                    </div>
-
-                    {/* MODULE: BUS SERVICE */}
-                    <div className={`p-8 rounded-xl transition-all duration-300 border ${config.bus?.enabled ? 'border-[#333]/20 bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50'}`}>
-                        <div className="flex justify-between items-center mb-6">
-                            <div className="flex items-center gap-3">
-                                <span className="text-xl opacity-70">🚌</span>
-                                <h3 className="font-display text-xl text-[#333]">Servicio de Autobús</h3>
-                            </div>
-                            <Switch checked={config.bus?.enabled || false} onChange={() => toggleModule('bus')} />
-                        </div>
-                        {config.bus?.enabled && (
-                            <div className="animate-fade-in-up text-sm text-gray-500 italic">
-                                Al activar esta opción, los invitados verán una casilla para confirmar si necesitan transporte.
-                            </div>
-                        )}
-                    </div>
-
-
                 </div>
 
-                <div className="pt-4 pb-6 bg-white border-t border-gray-100 z-10 sticky bottom-0">
-                    <button onClick={handleSave} className="w-full py-4 bg-[#333] text-white font-bold text-xs uppercase tracking-[0.2em] rounded-lg shadow-xl hover:bg-black hover:scale-[1.01] transition-all duration-300">
-                        Guardar y Publicar
+                {/* FOOTER ACTIONS */}
+                <div className="px-6 py-6 bg-white border-t border-gray-100 z-10">
+                    <button onClick={handleSave} className="w-full py-4 bg-[#333] text-white font-bold text-xs uppercase tracking-[0.2em] rounded-xl shadow-xl hover:bg-black hover:scale-[1.01] hover:shadow-2xl transition-all duration-300 flex items-center justify-center gap-3">
+                        Guardar Cambios y Publicar
                     </button>
-                    <p className="text-center text-[10px] text-gray-400 mt-3">Los cambios se aplican instantáneamente en la invitación web.</p>
+                    <p className="text-center text-[10px] text-gray-400 mt-3 font-medium">Todos los cambios se reflejarán instantáneamente.</p>
                 </div>
             </div>
 
-            {/* RIGHT: LIVE PREVIEW (IPHONE MOCKUP) */}
-            <div className="hidden lg:flex flex-col items-center justify-center flex-1 bg-[#F9F9F9] rounded-3xl m-4 border border-gray-100 relative">
-                <p className="absolute top-8 text-[10px] font-bold uppercase tracking-[0.3em] text-gray-300">Vista Previa en Vivo</p>
+            {/* RIGHT: LIVE PREVIEW */}
+            <div className="hidden lg:flex flex-col items-center justify-center w-[500px] bg-gray-50 border-l border-gray-100 relative shadow-[inset_10px_0_30px_-10px_rgba(0,0,0,0.03)]">
+                <div className="absolute top-8 flex flex-col items-center gap-2 animate-fade-in">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm border border-gray-100">
+                        <Smartphone size={14} className="text-[#C5A065]" />
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Vista Previa Móvil</p>
+                    </div>
+                </div>
 
-                <div className="w-[375px] h-[812px] bg-white border-[14px] border-[#333] rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col transform scale-90">
+                <div className="w-[375px] h-[812px] bg-white border-[14px] border-[#333] rounded-[3.5rem] shadow-2xl relative overflow-hidden flex flex-col transform scale-90 ring-1 ring-black/5">
                     {/* CAMERA ISLAND */}
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 h-7 w-40 bg-[#333] rounded-b-2xl z-20"></div>
 
@@ -259,31 +684,34 @@ export default function InvitationConfigPage() {
                                 title="Live Preview"
                             />
                         ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center text-gray-400">
-                                <span className="text-4xl mb-4">✨</span>
-                                <p className="text-sm font-medium">Crea al menos un invitado para generar una vista previa real.</p>
+                            <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center text-gray-300 bg-gray-50">
+                                <Smartphone size={48} className="mb-4 opacity-20" />
+                                <p className="text-sm font-medium">Crea tu primer invitado<br />para generar la vista previa.</p>
                             </div>
                         )}
                     </div>
                 </div>
             </div>
 
-        </div>
+        </div >
     );
 }
 
 // UI COMPONENTS FOR EDITOR
-function TextInput({ label, type = "text", value, onChange, placeholder }) {
+function TextInput({ label, type = "text", value, onChange, placeholder, icon }) {
     return (
-        <div>
-            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{label}</label>
-            <input
-                type={type}
-                value={value}
-                onChange={onChange}
-                placeholder={placeholder}
-                className="w-full pb-2 bg-transparent border-b border-gray-200 focus:border-[#333] outline-none transition text-sm font-medium text-[#333] placeholder-gray-300"
-            />
+        <div className="group">
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 group-focus-within:text-[#333] transition-colors">{label}</label>
+            <div className="relative">
+                <input
+                    type={type}
+                    value={value}
+                    onChange={onChange}
+                    placeholder={placeholder}
+                    className="w-full pb-2 pl-0 bg-transparent border-b border-gray-200 focus:border-[#333] outline-none transition-all duration-300 text-sm font-medium text-[#333] placeholder-gray-300 focus:pl-1"
+                />
+                {icon && <div className="absolute right-0 bottom-2 text-gray-300">{icon}</div>}
+            </div>
         </div>
     );
 }
@@ -292,21 +720,21 @@ function Switch({ checked, onChange }) {
     return (
         <button
             onClick={onChange}
-            className={`w-12 h-6 rounded-full transition-all duration-300 relative ${checked ? 'bg-[#333]' : 'bg-gray-200'}`}
+            className={`w-11 h-6 rounded-full transition-all duration-300 relative focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#333]/30 ${checked ? 'bg-[#333]' : 'bg-gray-200'}`}
         >
-            <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-sm ${checked ? 'translate-x-6' : 'translate-x-0'}`}></div>
+            <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-sm ${checked ? 'translate-x-5' : 'translate-x-0'}`}></div>
         </button>
     );
 }
 
-// UI COMPONENTS FOR MOCKUP
-function MockupButton({ icon, label, enabled }) {
-    if (!enabled) return null;
+function ToolbarBtn({ icon, label, onClick, color = "bg-gray-50 hover:bg-gray-100 text-[#333]" }) {
     return (
-        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-sm shadow-sm">{icon}</div>
-            <span className="text-xs font-display text-[#333]">{label}</span>
-            <div className="ml-auto text-[10px] text-gray-400">→</div>
-        </div>
+        <button
+            onClick={onClick}
+            className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl transition-all duration-300 hover:scale-[1.05] hover:shadow-md ${color}`}
+        >
+            <div className="opacity-80">{icon}</div>
+            <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+        </button>
     );
 }

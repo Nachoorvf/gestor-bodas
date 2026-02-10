@@ -134,13 +134,37 @@ export default function MesasPage() {
         setSelectedTableId(null);
     };
 
+
     const assignGuest = async (guestId, tableId) => {
-        await updateDoc(doc(db, 'weddings', weddingId, 'guests', guestId), { tableId });
+        // Find the table to know its capacity
+        const table = tables.find(t => t.id === tableId);
+        if (!table) return;
+
+        // Find currently occupied seats
+        const seatedGuests = guests.filter(g => g.tableId === tableId && g.id !== guestId);
+        const occupiedSeats = seatedGuests.map(g => g.seatIndex).filter(i => i !== undefined);
+
+        // Find first available seat (0-based index)
+        let newSeatIndex = 0;
+        for (let i = 0; i < table.seats; i++) {
+            if (!occupiedSeats.includes(i)) {
+                newSeatIndex = i;
+                break;
+            }
+        }
+
+        await updateDoc(doc(db, 'weddings', weddingId, 'guests', guestId), {
+            tableId,
+            seatIndex: newSeatIndex
+        });
         setDraggingGuest(null);
     };
 
     const unassignGuest = async (guestId) => {
-        await updateDoc(doc(db, 'weddings', weddingId, 'guests', guestId), { tableId: null });
+        await updateDoc(doc(db, 'weddings', weddingId, 'guests', guestId), {
+            tableId: null,
+            seatIndex: null
+        });
     };
 
     // --- CANVAS INTERACTION ---
@@ -342,7 +366,7 @@ export default function MesasPage() {
 
                 {/* LAYOUT MODE TOGGLE (Floating Bottom Center) */}
                 {/* Adjusted bottom position for mobile to avoid tab bar */}
-                <div className="absolute bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-30">
+                <div className="absolute bottom-28 md:bottom-8 left-1/2 -translate-x-1/2 z-30 w-full flex justify-center pointer-events-none">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -350,7 +374,7 @@ export default function MesasPage() {
                             setSelectedTableId(null); // Deselect when switching modes
                         }}
                         className={`
-                            flex items-center gap-2 px-6 py-3 rounded-full shadow-xl font-bold text-sm transition-all transform hover:scale-105 select-none
+                            pointer-events-auto flex items-center gap-2 px-6 py-3 rounded-full shadow-xl font-bold text-sm transition-all transform hover:scale-105 select-none
                             ${isLayoutMode
                                 ? 'bg-boda-text text-white ring-4 ring-boda-text/20'
                                 : 'bg-white text-gray-600 hover:text-boda-text border border-gray-100'
@@ -367,9 +391,9 @@ export default function MesasPage() {
 
                 {/* Zoom Controls */}
                 <div className="absolute top-4 right-4 z-30 flex gap-2 bg-white p-1.5 rounded-xl shadow-lg border border-gray-100">
-                    <button onClick={() => setZoom(z => Math.max(0.4, z - 0.1))} className="w-8 h-8 rounded-lg hover:bg-gray-50 font-bold text-gray-500">-</button>
+                    <button onClick={() => setZoom(z => Math.max(0.4, z - 0.1))} className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 font-bold text-gray-500 text-xl md:text-base">-</button>
                     <span className="flex items-center text-xs font-bold text-gray-400 w-8 justify-center">{Math.round(zoom * 100)}%</span>
-                    <button onClick={() => setZoom(z => Math.min(1.5, z + 0.1))} className="w-8 h-8 rounded-lg hover:bg-gray-50 font-bold text-gray-500">+</button>
+                    <button onClick={() => setZoom(z => Math.min(1.5, z + 0.1))} className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 font-bold text-gray-500 text-xl md:text-base">+</button>
                 </div>
 
                 {/* Canvas Area */}
@@ -583,9 +607,31 @@ export default function MesasPage() {
                                     <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full font-bold">{getGuestsForTable(selectedTable.id).length} / {selectedTable.seats}</span>
                                 </div>
                                 <div className="bg-gray-50 rounded-xl p-2 space-y-1 min-h-[100px]">
-                                    {getGuestsForTable(selectedTable.id).map(g => (
+                                    {getGuestsForTable(selectedTable.id).sort((a, b) => (a.seatIndex || 0) - (b.seatIndex || 0)).map(g => (
                                         <div key={g.id} className="flex justify-between items-center p-2 bg-white rounded-lg shadow-sm border border-gray-100 group">
-                                            <span className="text-sm text-gray-600">{g.nombre}</span>
+                                            <div className="flex items-center gap-2">
+                                                <select
+                                                    className="bg-gray-100 text-[10px] font-bold rounded px-1 py-0.5 outline-none cursor-pointer hover:bg-gray-200 transition"
+                                                    value={g.seatIndex !== undefined ? g.seatIndex : -1}
+                                                    onChange={async (e) => {
+                                                        const newIndex = parseInt(e.target.value);
+                                                        // Check if seat is taken
+                                                        const currentOccupant = guests.find(og => og.tableId === selectedTable.id && og.seatIndex === newIndex);
+
+                                                        if (currentOccupant) {
+                                                            // Swap seats
+                                                            await updateDoc(doc(db, 'weddings', weddingId, 'guests', currentOccupant.id), { seatIndex: g.seatIndex });
+                                                        }
+
+                                                        await updateDoc(doc(db, 'weddings', weddingId, 'guests', g.id), { seatIndex: newIndex });
+                                                    }}
+                                                >
+                                                    {Array.from({ length: selectedTable.seats }).map((_, i) => (
+                                                        <option key={i} value={i}>{i + 1}</option>
+                                                    ))}
+                                                </select>
+                                                <span className="text-sm text-gray-600 truncate max-w-[120px]" title={g.nombre}>{g.nombre}</span>
+                                            </div>
                                             <button onClick={() => unassignGuest(g.id)} className="text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">✕</button>
                                         </div>
                                     ))}

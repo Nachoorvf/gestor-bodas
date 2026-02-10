@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../../../../firebase/config';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
-import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy } from 'lucide-react'; // Added 'Copy'
+import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy, Clock, Image as ImageIcon } from 'lucide-react';
 
 export default function InvitationPublicPage() {
     const { weddingId, invitationId } = useParams();
@@ -17,6 +17,15 @@ export default function InvitationPublicPage() {
 
     // MODAL STATES
     const [activeModal, setActiveModal] = useState(null); // 'rsvp' | 'timeline' | 'gift'
+    const [notification, setNotification] = useState(null); // { message, type: 'success'|'error' }
+
+    // Toast Timer
+    useEffect(() => {
+        if (notification) {
+            const timer = setTimeout(() => setNotification(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [notification]);
 
     // Load Data
     useEffect(() => {
@@ -51,6 +60,24 @@ export default function InvitationPublicPage() {
         loadData();
     }, [weddingId, invitationId]);
 
+    // REAL-TIME PREVIEW LISTENER
+    useEffect(() => {
+        const handleMessage = (event) => {
+            if (event.data?.type === 'UPDATE_CONFIG') {
+                setWeddingData(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        invitationConfig: event.data.config
+                    };
+                });
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
+
     // Handlers
     const updateGuestState = (guestId, field, value) => {
         setGuests(prev => prev.map(g => {
@@ -71,19 +98,23 @@ export default function InvitationPublicPage() {
                 batch.update(ref, { confirmado: g.confirmado, bus: g.bus });
             });
             await batch.commit();
-            alert("¡Muchas gracias! Vuestra asistencia ha sido confirmada.");
-            setActiveModal(null);
+            setNotification({ message: "¡Muchas gracias! Asistencia confirmada.", type: 'success' });
+            setTimeout(() => setActiveModal(null), 1500);
         } catch (err) {
             console.error(err);
-            alert("Hubo un problema al guardar.");
+            setNotification({ message: "Hubo un problema al guardar.", type: 'error' });
         } finally {
             setSaving(false);
         }
     };
 
+    // Helper for IBAN copy
+    const [copiedIban, setCopiedIban] = useState(false);
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
-        alert("IBAN copiado al portapapeles");
+        setCopiedIban(true);
+        setTimeout(() => setCopiedIban(false), 2000);
+        setNotification({ message: "IBAN copiado al portapapeles", type: 'success' });
     };
 
     // Render Helpers
@@ -91,58 +122,101 @@ export default function InvitationPublicPage() {
         const config = weddingData?.invitationConfig;
         if (!config) return null;
 
+        // UNIFIED LIST
+        const fixed = ['location', 'timeline', 'bank'].map(key => ({
+            id: key,
+            type: 'fixed',
+            order: config[key]?.order || 99,
+            ...config[key]
+        }));
+        const custom = (config.customBlocks || []).map(b => ({
+            ...b,
+            isCustom: true
+        }));
+
+        const allItems = [...fixed, ...custom].sort((a, b) => a.order - b.order);
+
         return (
-            <div className="flex flex-wrap justify-center gap-4 mt-8 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+            <div className="flex flex-col items-center gap-6 mt-12 w-full max-w-lg mx-auto animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+                {allItems.map(item => {
+                    if (!item.enabled && !item.isCustom) return null; // Fixed modules have enabled flag
+                    // Removed global check for empty content to allow placeholders
 
-                {/* LOCATION MODULE */}
-                {config.location?.enabled && (
-                    <a
-                        href={config.location.mapUrl || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 bg-white/60 backdrop-blur px-6 py-4 rounded-2xl border border-white/50 shadow-sm hover:bg-white transition group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-[#333] text-white flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <MapPin size={18} />
-                        </div>
-                        <div className="text-left">
-                            <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Ubicación</p>
-                            <p className="font-serif text-[#333]">{config.location.address || "Ver Mapa"}</p>
-                        </div>
-                    </a>
-                )}
+                    // --- FIXED MODULES ---
+                    if (item.id === 'location') {
+                        return (
+                            <a key={item.id} href={item.mapUrl || '#'} target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-4 bg-white/60 backdrop-blur px-6 py-5 rounded-2xl border border-white/50 shadow-sm hover:bg-white transition group">
+                                <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><MapPin size={20} /></div>
+                                <div className="text-left">
+                                    <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Ubicación'}</p>
+                                    <p className="font-serif text-[#333] text-lg">{item.address || "Ver Mapa"}</p>
+                                </div>
+                            </a>
+                        );
+                    }
+                    if (item.id === 'timeline') {
+                        return (
+                            <button key={item.id} onClick={() => setActiveModal('timeline')} className="w-full flex items-center gap-4 bg-white/60 backdrop-blur px-6 py-5 rounded-2xl border border-white/50 shadow-sm hover:bg-white transition group">
+                                <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Calendar size={20} /></div>
+                                <div className="text-left">
+                                    <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Agenda'}</p>
+                                    <p className="font-serif text-[#333] text-lg">Ver Horarios</p>
+                                </div>
+                            </button>
+                        );
+                    }
+                    if (item.id === 'bank') {
+                        return (
+                            <button key={item.id} onClick={() => setActiveModal('gift')} className="w-full flex items-center gap-4 bg-white/60 backdrop-blur px-6 py-5 rounded-2xl border border-white/50 shadow-sm hover:bg-white transition group">
+                                <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Gift size={20} /></div>
+                                <div className="text-left">
+                                    <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Regalo'}</p>
+                                    <p className="font-serif text-[#333] text-lg">Lista de Boda</p>
+                                </div>
+                            </button>
+                        );
+                    }
 
-                {/* TIMELINE MODULE */}
-                {config.timeline?.enabled && (
-                    <button
-                        onClick={() => setActiveModal('timeline')}
-                        className="flex items-center gap-3 bg-white/60 backdrop-blur px-6 py-4 rounded-2xl border border-white/50 shadow-sm hover:bg-white transition group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-[#333] text-white flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Calendar size={18} />
-                        </div>
-                        <div className="text-left">
-                            <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Agenda</p>
-                            <p className="font-serif text-[#333]">Ver Horarios</p>
-                        </div>
-                    </button>
-                )}
+                    // --- CUSTOM BLOCKS ---
+                    if (item.isCustom) {
+                        return (
+                            <div key={item.id} className="w-full animate-fade-in-up">
+                                {item.type === 'text' && (
+                                    <div className="text-center space-y-4 py-4">
+                                        {item.title && <h3 className="font-display text-3xl text-[#333]">{item.title}</h3>}
+                                        <p className="font-serif text-gray-600 leading-relaxed whitespace-pre-wrap">{item.content}</p>
+                                    </div>
+                                )}
+                                {item.type === 'image' && (
+                                    <div className="rounded-2xl overflow-hidden shadow-lg border-4 border-white transform rotate-1 hover:rotate-0 transition duration-500">
+                                        {item.content ? (
+                                            <img src={item.content} alt={item.title} loading="lazy" className="w-full h-auto object-cover" />
+                                        ) : (
+                                            <div className="w-full aspect-video bg-gray-100 flex flex-col items-center justify-center text-gray-400">
+                                                <ImageIcon size={48} className="mb-2 opacity-50" />
+                                            </div>
+                                        )}
+                                        {item.title && <p className="bg-white text-center py-2 font-display text-xl text-[#333]">{item.title}</p>}
+                                    </div>
+                                )}
+                                {item.type === 'video' && (
+                                    <div className="rounded-2xl overflow-hidden shadow-lg border-4 border-white aspect-video bg-black">
+                                        <iframe src={item.content} className="w-full h-full" allowFullScreen title={item.title} />
+                                    </div>
+                                )}
 
-                {/* GIFT / BANK MODULE */}
-                {config.bank?.enabled && (
-                    <button
-                        onClick={() => setActiveModal('gift')}
-                        className="flex items-center gap-3 bg-white/60 backdrop-blur px-6 py-4 rounded-2xl border border-white/50 shadow-sm hover:bg-white transition group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-[#333] text-white flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Gift size={18} />
-                        </div>
-                        <div className="text-left">
-                            <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Regalo</p>
-                            <p className="font-serif text-[#333]">Lista de Boda</p>
-                        </div>
-                    </button>
-                )}
+                                {item.type === 'countdown' && (
+                                    <CountdownBlock targetDate={item.content} title={item.title} />
+                                )}
+
+                                {item.type === 'gallery' && (
+                                    <GalleryBlock images={item.content} title={item.title} />
+                                )}
+                            </div>
+                        );
+                    }
+                    return null;
+                })}
             </div>
         );
     };
@@ -169,16 +243,40 @@ export default function InvitationPublicPage() {
     const partner1 = weddingData?.novios?.[0] || "Ana";
     const partner2 = weddingData?.novios?.[1] || "Carlos";
 
+    // Design Config Defaults
+    const design = weddingData?.invitationConfig?.design || {};
+    const primaryColor = design.primaryColor || '#333';
+    const bgImage = design.backgroundImage || 'https://images.unsplash.com/photo-1606800052052-a08af7148866?q=80&w=2070&auto=format&fit=crop';
+    const overlayOp = (design.overlayOpacity ?? 50) / 100;
+
+    // Font Mapping
+    const fontMap = {
+        'serif': 'font-serif', // Playfair
+        'sans': 'font-sans',   // Inter
+        'script': 'font-display' // Cormorant (using display var for script feel)
+    };
+    const activeFont = fontMap[design.fontPair] || 'font-serif';
+
     return (
-        <div className="min-h-screen bg-[#FDFBF7] text-[#333] font-sans selection:bg-[#333] selection:text-white flex flex-col">
+        <div
+            className={`min-h-screen bg-[#FDFBF7] text-[#333] ${activeFont} selection:bg-[var(--primary)] selection:text-white flex flex-col`}
+            style={{ '--primary': primaryColor }}
+        >
 
             {/* HERO SECTION */}
             <div className="min-h-screen flex flex-col relative overflow-hidden py-10">
-                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1606800052052-a08af7148866?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-10 grayscale mix-blend-multiply"></div>
+                <div
+                    className="absolute inset-0 bg-cover bg-center transition-all duration-700"
+                    style={{ backgroundImage: `url('${bgImage}')` }}
+                ></div>
+                <div
+                    className="absolute inset-0 bg-[#FDFBF7] transition-all duration-500"
+                    style={{ opacity: 1 - overlayOp, mixBlendMode: 'normal' }} // Simple overlay
+                ></div>
                 <div className="absolute inset-0 bg-gradient-to-b from-[#FDFBF7]/0 via-[#FDFBF7]/50 to-[#FDFBF7]"></div>
 
                 <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center p-8 space-y-6 animate-fade-in-up">
-                    <p className="uppercase tracking-[0.4em] text-xs font-bold text-gray-500">Estás invitado a la boda de</p>
+                    <p className="uppercase tracking-[0.4em] text-xs font-bold text-gray-500">{design.welcomeMessage || "Estás invitado a la boda de"}</p>
 
                     <h1 className="font-display text-5xl md:text-8xl text-[#333] leading-tight">
                         {partner1} <span className="text-3xl md:text-5xl font-serif italic text-gray-400">&</span><br />{partner2}
@@ -187,7 +285,7 @@ export default function InvitationPublicPage() {
                     <div className="w-10 h-[1px] bg-[#333] my-6"></div>
 
                     <div className="font-serif italic text-xl text-gray-600 max-w-md leading-relaxed px-4">
-                        "¡Queremos celebrar el amor con la gente que más queremos!"
+                        "{design.celebrationMessage || "¡Queremos celebrar el amor con la gente que más queremos!"}"
                     </div>
 
                     <div className="mt-8 bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-white/50 max-w-sm w-full mx-auto transform hover:scale-105 transition-transform duration-500">
@@ -201,7 +299,7 @@ export default function InvitationPublicPage() {
                 <div className="relative z-20 pb-12 px-6 flex justify-center mt-auto">
                     <button
                         onClick={() => setActiveModal('rsvp')}
-                        className="group relative bg-[#333] text-white px-10 py-5 rounded-full font-bold uppercase tracking-[0.2em] text-sm hover:bg-black transition-all shadow-2xl hover:shadow-xl hover:-translate-y-1 w-full max-w-sm overflow-hidden"
+                        className="group relative bg-[var(--primary)] text-white px-10 py-5 rounded-full font-bold uppercase tracking-[0.2em] text-sm hover:opacity-90 transition-all shadow-2xl hover:shadow-xl hover:-translate-y-1 w-full max-w-sm overflow-hidden"
                     >
                         <span className="relative z-10 flex items-center justify-center gap-2">
                             Confirmar Asistencia <ChevronDown size={16} className="animate-bounce" />
@@ -222,8 +320,8 @@ export default function InvitationPublicPage() {
                         <div className="p-8 border-b border-gray-100 flex justify-between items-center shrink-0">
                             <div>
                                 {activeModal === 'rsvp' && <h3 className="font-serif text-2xl text-[#333]">Vuestra Asistencia</h3>}
-                                {activeModal === 'timeline' && <h3 className="font-serif text-2xl text-[#333]">Agenda del Día</h3>}
-                                {activeModal === 'gift' && <h3 className="font-serif text-2xl text-[#333]">Lista de Boda</h3>}
+                                {activeModal === 'timeline' && <h3 className="font-serif text-2xl text-[#333]">{weddingData?.invitationConfig?.timeline?.title || 'Agenda del Día'}</h3>}
+                                {activeModal === 'gift' && <h3 className="font-serif text-2xl text-[#333]">{weddingData?.invitationConfig?.bank?.title || 'Lista de Boda'}</h3>}
                             </div>
                             <button onClick={() => setActiveModal(null)} className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 flex items-center justify-center transition">✕</button>
                         </div>
@@ -241,13 +339,13 @@ export default function InvitationPublicPage() {
                                                 <span className="text-lg font-bold text-[#333]">{guest.nombre}</span>
                                             </div>
                                             <div className="pl-11 grid grid-cols-2 gap-3">
-                                                <button onClick={() => updateGuestState(guest.id, 'confirmado', true)} className={`py-3 px-4 rounded-xl border-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${guest.confirmado === true ? 'border-[#333] bg-[#333] text-white' : 'border-gray-100 bg-white text-gray-400 hover:border-gray-300'}`}>{guest.confirmado === true && <Check size={14} />} Sí, voy</button>
+                                                <button onClick={() => updateGuestState(guest.id, 'confirmado', true)} className={`py-3 px-4 rounded-xl border-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${guest.confirmado === true ? 'border-[var(--primary)] bg-[var(--primary)] text-white' : 'border-gray-100 bg-white text-gray-400 hover:border-gray-300'}`}>{guest.confirmado === true && <Check size={14} />} Sí, voy</button>
                                                 <button onClick={() => updateGuestState(guest.id, 'confirmado', false)} className={`py-3 px-4 rounded-xl border-2 text-xs font-bold uppercase tracking-wider transition-all ${guest.confirmado === false ? 'border-gray-200 bg-gray-100 text-gray-500' : 'border-gray-100 bg-white text-gray-400 hover:border-gray-300'}`}>No puedo</button>
                                             </div>
-                                            {weddingData?.invitationConfig?.bus?.enabled && (
+                                            {weddingData?.busConfig?.enabled && (
                                                 <div className={`pl-11 transition-all duration-300 overflow-hidden ${guest.confirmado === true ? 'max-h-20 opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
                                                     <label className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl cursor-pointer hover:bg-stone-100 transition border border-transparent hover:border-stone-200">
-                                                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${guest.bus ? 'bg-[#333] border-[#333]' : 'bg-white border-gray-300'}`}>{guest.bus && <Check size={12} className="text-white" />}</div>
+                                                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${guest.bus ? 'bg-[var(--primary)] border-[var(--primary)]' : 'bg-white border-gray-300'}`}>{guest.bus && <Check size={12} className="text-white" />}</div>
                                                         <input type="checkbox" checked={guest.bus || false} onChange={(e) => updateGuestState(guest.id, 'bus', e.target.checked)} className="hidden" />
                                                         <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Necesitaré Autobús</span>
                                                     </label>
@@ -256,7 +354,7 @@ export default function InvitationPublicPage() {
                                         </div>
                                     ))}
                                     <div className="pt-6">
-                                        <button onClick={handleSaveAll} disabled={saving} className="w-full bg-[#333] text-white py-4 rounded-xl font-bold uppercase tracking-[0.2em] text-sm hover:bg-black transition-all shadow-lg active:scale-[0.98]">{saving ? 'Guardando...' : 'Enviar Respuesta'}</button>
+                                        <button onClick={handleSaveAll} disabled={saving} className="w-full bg-[var(--primary)] text-white py-4 rounded-xl font-bold uppercase tracking-[0.2em] text-sm hover:opacity-90 transition-all shadow-lg active:scale-[0.98]">{saving ? 'Guardando...' : 'Enviar Respuesta'}</button>
                                     </div>
                                 </div>
                             )}
@@ -292,9 +390,9 @@ export default function InvitationPublicPage() {
                                             <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Número de Cuenta</p>
                                             <div className="flex items-center gap-3">
                                                 <p className="font-mono text-xl md:text-2xl text-[#333] tracking-widest">{weddingData.invitationConfig.bank.iban}</p>
-                                                <Copy size={16} className="text-gray-400 group-hover:text-[#333]" />
+                                                {copiedIban ? <Check size={16} className="text-green-500" /> : <Copy size={16} className="text-gray-400 group-hover:text-[#333]" />}
                                             </div>
-                                            <p className="text-[10px] text-gray-400 mt-2">Click para copiar</p>
+                                            <p className="text-[10px] text-gray-400 mt-2">{copiedIban ? '¡Copiado!' : 'Click para copiar'}</p>
                                         </div>
                                     )}
                                 </div>
@@ -303,6 +401,132 @@ export default function InvitationPublicPage() {
                     </div>
                 </div>
             )}
+            {/* TOAST NOTIFICATION */}
+            {notification && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] animate-fade-in-up">
+                    <div className={`px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-[#333] text-white'}`}>
+                        {notification.type === 'success' ? <Check size={16} /> : null}
+                        <span className="text-sm font-bold">{notification.message}</span>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// --- NEW COMPONENTS ---
+
+function CountdownBlock({ targetDate, title }) {
+    const [timeLeft, setTimeLeft] = useState(null);
+    const [status, setStatus] = useState('loading'); // loading, active, finished, invalid
+
+    useEffect(() => {
+        if (!targetDate) {
+            setStatus('invalid');
+            return;
+        }
+
+        const calculate = () => {
+            const now = new Date().getTime();
+            const target = new Date(targetDate).getTime();
+
+            if (isNaN(target)) {
+                setStatus('invalid');
+                return null;
+            }
+
+            const diff = target - now;
+            if (diff <= 0) {
+                setStatus('finished');
+                return null;
+            }
+
+            setStatus('active');
+            return {
+                días: Math.floor(diff / (1000 * 60 * 60 * 24)),
+                horas: Math.floor((diff / (1000 * 60 * 60)) % 24),
+                min: Math.floor((diff / 1000 / 60) % 60),
+                seg: Math.floor((diff / 1000) % 60),
+            };
+        };
+
+        const initial = calculate();
+        if (initial) setTimeLeft(initial);
+
+        const timer = setInterval(() => {
+            setTimeLeft(calculate());
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [targetDate]);
+
+    // RENDER STATES
+    if (status === 'invalid') return null; // Or placeholder for admin?
+
+    if (status === 'finished') {
+        return (
+            <div className="py-10 text-center animate-fade-in-up">
+                <p className="font-display text-4xl text-[#333] mb-2">¡Es Hoy!</p>
+                <p className="font-serif italic text-gray-500">Que empiece la fiesta</p>
+            </div>
+        );
+    }
+
+    if (!timeLeft) return null;
+
+    return (
+        <div className="py-8 w-full max-w-sm mx-auto">
+            {title && <h3 className="text-center font-display text-2xl text-[#333] mb-6">{title}</h3>}
+            <div className="flex justify-center gap-3 text-center">
+                {Object.keys(timeLeft).map((interval) => (
+                    <div key={interval} className="flex flex-col items-center bg-white/80 backdrop-blur-sm p-3 rounded-xl shadow-sm border border-white/50 w-20">
+                        <span className="font-display text-3xl text-[#333] leading-none mb-1">
+                            {timeLeft[interval] < 10 ? `0${timeLeft[interval]}` : timeLeft[interval]}
+                        </span>
+                        <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                            {interval}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function GalleryBlock({ images, title }) {
+    if (!images || !Array.isArray(images) || images.length === 0) {
+        return (
+            <div className="py-6 w-full opacity-50">
+                {title && <h3 className="text-center font-display text-3xl text-[#333] mb-6">{title}</h3>}
+                <div className="w-full aspect-video bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center p-8 text-gray-400">
+                    <ImageIcon size={48} className="mb-2" />
+                    <p className="font-serif text-sm">Galería vacía</p>
+                    <p className="text-[10px] uppercase tracking-widest mt-1">Añade fotos desde el editor</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="py-6 w-full">
+            {title && <h3 className="text-center font-display text-3xl text-[#333] mb-6">{title}</h3>}
+
+            <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-6 -mx-6 px-6 scrollbar-hide">
+                {images.map((img, idx) => (
+                    <div key={idx} className="snap-center shrink-0 w-[85%] md:w-[60%] aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-4 border-white relative">
+                        <img
+                            src={img}
+                            alt={`Gallery ${idx}`}
+                            loading="lazy"
+                            className="w-full h-full object-cover"
+                        />
+                        <div className="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
+                            {idx + 1} / {images.length}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest opacity-60">Desliza para ver más</p>
         </div>
     );
 }

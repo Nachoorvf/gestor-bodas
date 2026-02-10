@@ -108,7 +108,7 @@ export default function VisualTable({ table, guests = [], isDragging, isSelected
 
                 {/* CHAIRS */}
                 {Array.from({ length: seats }).map((_, i) => {
-                    const guest = guests[i]; // Slot i
+                    const guest = guests.find(g => g.seatIndex === i); // Match guest by specific seat index
                     const pos = getChairPosition(i, seats);
 
                     return (
@@ -123,7 +123,7 @@ export default function VisualTable({ table, guests = [], isDragging, isSelected
                             style={{
                                 transform: `translate(${pos.x}px, ${pos.y}px)`,
                             }}
-                            title={guest ? guest.nombre : 'Vacío'}
+                            title={guest ? `Silla ${i + 1}: ${guest.nombre}` : `Silla ${i + 1}: Vacía`}
                         >
                             {guest ? (
                                 <span className="text-xs font-bold leading-none">{guest.nombre.substring(0, 2).toUpperCase()}</span>

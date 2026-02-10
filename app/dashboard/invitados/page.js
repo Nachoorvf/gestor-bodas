@@ -314,11 +314,19 @@ export default function InvitadosPage() {
 
                 <button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="bg-[#333] text-white px-8 py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-black transition shadow-lg flex items-center gap-2"
+                    className="hidden md:flex bg-[#333] text-white px-8 py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-black transition shadow-lg items-center gap-2"
                 >
                     <Plus size={16} /> Crear Invitado
                 </button>
             </div>
+
+            {/* MOBILE FAB (Floating Action Button) */}
+            <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="md:hidden fixed bottom-6 right-6 z-40 w-14 h-14 bg-[#333] text-white rounded-full shadow-2xl flex items-center justify-center hover:bg-black transition animate-scale-up"
+            >
+                <Plus size={24} />
+            </button>
 
             {/* SEARCH */}
             <div className="relative">
@@ -414,15 +422,15 @@ export default function InvitadosPage() {
                                     <div
                                         key={guest.id}
                                         onClick={() => handleSelectGuestFromList(guest)}
-                                        className={`p-3 rounded-xl cursor-pointer transition border border-transparent flex items-center justify-between ${selectedInvitationId === guest.invitationId ? 'bg-gray-50 border-gray-200 shadow-inner' : 'hover:bg-gray-50'}`}
+                                        className={`p-4 md:p-3 rounded-xl cursor-pointer transition border border-transparent flex items-center justify-between ${selectedInvitationId === guest.invitationId ? 'bg-gray-50 border-gray-200 shadow-inner' : 'hover:bg-gray-50'}`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${guest.confirmado ? 'bg-green-100 text-green-700' : (guest.confirmado === false ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-400')}`}>
-                                                {guest.confirmado ? <Check size={14} /> : (guest.confirmado === false ? <X size={14} /> : <Clock size={14} />)}
+                                            <div className={`w-10 h-10 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs font-bold ${guest.confirmado ? 'bg-green-100 text-green-700' : (guest.confirmado === false ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-400')}`}>
+                                                {guest.confirmado ? <Check size={16} /> : (guest.confirmado === false ? <X size={16} /> : <Clock size={16} />)}
                                             </div>
                                             <div>
-                                                <p className="font-bold text-[#333] text-sm">{guest.nombre}</p>
-                                                <p className="text-[10px] text-gray-400">{guest.group || 'Sin Sobre'}</p>
+                                                <p className="font-bold text-[#333] text-base md:text-sm">{guest.nombre}</p>
+                                                <p className="text-xs md:text-[10px] text-gray-400">{guest.group || 'Sin Sobre'}</p>
                                             </div>
                                         </div>
                                         {guest.role && <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{guest.role}</span>}
@@ -445,9 +453,9 @@ export default function InvitadosPage() {
                                                 <div
                                                     key={guest.id}
                                                     onClick={() => handleSelectGuestFromList(guest)}
-                                                    className={`p-2 rounded-lg cursor-pointer transition flex items-center justify-between ${selectedInvitationId === guest.invitationId ? 'bg-white shadow-sm border border-gray-100' : 'hover:bg-white/50'}`}
+                                                    className={`p-3 md:p-2 rounded-lg cursor-pointer transition flex items-center justify-between ${selectedInvitationId === guest.invitationId ? 'bg-white shadow-sm border border-gray-100' : 'hover:bg-white/50'}`}
                                                 >
-                                                    <span className="text-sm font-medium text-gray-700">{guest.nombre}</span>
+                                                    <span className="text-base md:text-sm font-medium text-gray-700">{guest.nombre}</span>
                                                     <div className={`w-2 h-2 rounded-full ${guest.confirmado ? 'bg-green-500' : (guest.confirmado === false ? 'bg-red-500' : 'bg-gray-300')}`}></div>
                                                 </div>
                                             ))}
@@ -464,7 +472,7 @@ export default function InvitadosPage() {
                 {/* RIGHT: DETAILS PANEL */}
                 <div className={`
                             bg-white flex-col overflow-hidden
-                            lg:flex-1 lg:max-w-md lg:rounded-[2rem] lg:shadow-sm lg:border lg:border-gray-100 lg:relative lg:min-h-[400px]
+                            lg:flex-1 lg:max-w-md lg:rounded-[2rem] lg:shadow-sm lg:border lg:border-gray-100 lg:sticky lg:top-32 lg:self-start lg:max-h-[calc(100vh-8rem)] lg:min-h-[400px]
                             ${selectedInvitationId
                         ? 'flex w-full animate-fade-in'
                         : 'hidden lg:flex'
