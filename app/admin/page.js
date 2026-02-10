@@ -6,6 +6,11 @@ import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { deleteWedding } from '../actions';
 import { useAuth } from '../../context/AuthContext';
+import {
+  Users, Gem, Calendar, Search, Plus,
+  LogOut, LayoutDashboard, Check, X,
+  Trash2, Edit, Euro
+} from 'lucide-react';
 
 // COMPONENTS
 import AdminHeader from '../../components/admin/AdminHeader';
@@ -174,46 +179,60 @@ export default function AdminDashboard() {
 
   // --- RENDERING ---
 
-  if (!isAuthorized) return <div className="min-h-screen flex items-center justify-center animate-pulse">Cargando...</div>;
+  if (!isAuthorized) return <div className="min-h-screen flex items-center justify-center animate-pulse font-serif text-[#C5A065]">Cargando Panel...</div>;
 
   // Filter Logic
   const filteredUsers = users.filter(u => (u.email || '').toLowerCase().includes(searchTerm.toLowerCase()) || (u.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredWeddings = bodas.filter(b => b.novios?.some(n => (n || '').toLowerCase().includes(searchTerm.toLowerCase())) || (b.id || '').includes(searchTerm));
 
   return (
-    <div className="min-h-screen bg-[#F0F0F0] font-body text-gray-800">
+    <div className="min-h-screen bg-[#FDFBF7] font-sans text-[#333]">
 
-      {/* BACKGROUND TEXTURE */}
-      <div className="fixed inset-0 z-0 opacity-[0.4]" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/p5.png")' }}></div>
+      {/* BACKGROUND DECOR */}
+      <div className="fixed inset-0 z-0 opacity-[0.4] bg-[url('https://www.transparenttextures.com/patterns/p5.png')] pointer-events-none"></div>
 
-      <div className="relative z-10 max-w-7xl mx-auto p-6 md:p-12 space-y-12">
+      <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-12 space-y-8 md:space-y-12">
 
         {/* HEADER */}
-        <AdminHeader user={user} onLogout={handleLogout} />
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <p className="text-[#C5A065] text-[10px] font-bold uppercase tracking-[0.2em] mb-1">Panel de Control</p>
+            <h1 className="font-display text-3xl md:text-4xl text-[#333]">Administración</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden md:block">
+              <p className="text-sm font-bold">{user.displayName || 'Super Admin'}</p>
+              <p className="text-[10px] text-gray-400">{user.email}</p>
+            </div>
+            <button onClick={handleLogout} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors">
+              <LogOut size={20} />
+            </button>
+          </div>
+        </div>
 
-        {/* SEARCH & ACTIONS BAR - Executive Style */}
-        <div className="flex flex-col md:flex-row gap-6 items-center justify-between bg-white p-4 rounded-full shadow-lg shadow-gray-200/50 border border-gray-100">
+        {/* SEARCH & ACTIONS BAR - Premium Style */}
+        <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
 
           {/* Global Search */}
-          <div className="relative w-full md:w-96">
+          <div className="relative flex-1">
             <input
               type="text"
-              placeholder="Buscar usuarios, bodas, IDs..."
-              className="w-full pl-6 pr-4 py-3 bg-transparent border-none focus:outline-none focus:ring-0 text-gray-600 placeholder-gray-400 font-medium"
+              placeholder="Buscar usuarios, bodas..."
+              className="w-full pl-10 pr-4 py-3 bg-transparent border-none focus:outline-none focus:ring-0 text-gray-600 placeholder-gray-400 font-serif text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300">🔍</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#C5A065]"><Search size={16} /></span>
           </div>
 
-          <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
+          <div className="h-8 w-px bg-gray-100 hidden md:block"></div>
 
           {/* Create Test Wedding Button */}
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-8 py-3 bg-black text-white text-xs font-bold uppercase tracking-widest rounded-full hover:bg-boda-accent transition-colors duration-300 shadow-md"
+            className="px-6 py-3 bg-[#333] text-white text-[10px] font-bold uppercase tracking-[0.15em] rounded-xl hover:bg-black transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
           >
-            + Nueva Boda
+            <Plus size={14} /> Nueva Boda
           </button>
         </div>
 
@@ -235,18 +254,20 @@ export default function AdminDashboard() {
           {/* OVERVIEW TAB */}
           {activeTab === 'overview' && (
             <div className="space-y-8">
-              {/* KPI CARDS */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <AdminStatsCard title="Usuarios Totales" value={users.length} icon="👥" color="bg-gray-100 text-gray-600" />
-                <AdminStatsCard title="Bodas Activas" value={bodas.length} icon="💍" color="bg-gray-100 text-gray-600" />
-                <AdminStatsCard title="Solicitudes" value={solicitudes.length} icon="📩" color={solicitudes.length > 0 ? "bg-boda-accent text-white" : "bg-gray-100 text-gray-600"} />
-                <AdminStatsCard title="Ingresos (Sim)" value="0€" icon="💶" color="bg-gray-100 text-gray-600" />
+              {/* KPI CARDS - Responsive Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                <AdminStatsCard title="Usuarios" value={users.length} icon={<Users size={20} />} color="bg-gray-50 text-gray-500" />
+                <AdminStatsCard title="Bodas" value={bodas.length} icon={<Gem size={20} />} color="bg-gray-50 text-gray-500" />
+                <AdminStatsCard title="Solicitudes" value={solicitudes.length} icon={<Calendar size={20} />} color={solicitudes.length > 0 ? "bg-[#C5A065] text-white" : "bg-gray-50 text-gray-500"} />
+                <AdminStatsCard title="Ingresos" value="0€" icon={<Euro size={20} />} color="bg-gray-50 text-gray-500" />
               </div>
 
               {/* Pending Requests Preview */}
               {solicitudes.length > 0 && (
                 <div>
-                  <h2 className="text-lg font-bold mb-4 flex items-center gap-2">Solicitudes Pendientes <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span></h2>
+                  <h2 className="text-lg font-serif italic text-gray-500 mb-4 flex items-center gap-2">
+                    Solicitudes Pendientes <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
+                  </h2>
                   <AdminRequests requests={solicitudes} onApprove={handleApproveRequest} onReject={handleRejectRequest} loading={actionLoading} />
                 </div>
               )}
@@ -272,51 +293,54 @@ export default function AdminDashboard() {
 
         {/* MODAL EDIT USER */}
         {editingUser && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl scale-100 animate-scale-up relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-2 bg-boda-text"></div>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-serif font-bold text-gray-800">Editar Usuario</h2>
-                <button onClick={() => setEditingUser(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+          <div className="fixed inset-0 bg-[#333]/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-0 md:p-4 animate-fade-in">
+            <div className="bg-white rounded-t-3xl md:rounded-3xl p-8 max-w-md w-full shadow-2xl scale-100 animate-slide-up-mobile md:animate-scale-up relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-[#C5A065]"></div>
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-2xl font-display text-[#333]">Editar Usuario</h2>
+                <button onClick={() => setEditingUser(null)} className="text-gray-300 hover:text-gray-500"><X size={24} /></button>
               </div>
 
-              <form onSubmit={handleUpdateUser} className="space-y-4">
+              <form onSubmit={handleUpdateUser} className="space-y-6">
                 <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase">Nombre</label>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Nombre</label>
                   <input
                     type="text"
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-boda-text outline-none font-bold text-gray-800"
+                    className="w-full pb-2 border-b border-gray-200 focus:border-[#C5A065] outline-none text-lg font-serif text-[#333] transition-colors bg-transparent"
                     value={editingUser.displayName || ''}
                     onChange={e => setEditingUser({ ...editingUser, displayName: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase">Email (Solo DB)</label>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Email (Solo DB)</label>
                   <input
                     type="email"
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-boda-text outline-none text-gray-600"
+                    className="w-full pb-2 border-b border-gray-200 focus:border-[#C5A065] outline-none text-sm text-gray-600 transition-colors bg-transparent"
                     value={editingUser.email || ''}
                     onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
                   />
-                  <p className="text-[10px] text-orange-400 mt-1">* Cambiar esto aqui NO cambia el login de Firebase Auth, solo el documento.</p>
+                  <p className="text-[10px] text-orange-400 mt-1 italic">* No cambia el login de Firebase Auth.</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="text-xs font-bold text-gray-400 uppercase">Rol</label>
-                    <select
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-boda-text outline-none"
-                      value={editingUser.role || 'user'}
-                      onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
-                    >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Rol</label>
+                    <div className="relative">
+                      <select
+                        className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:border-[#C5A065] outline-none appearance-none"
+                        value={editingUser.role || 'user'}
+                        onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400"><LayoutDashboard size={14} /></div>
+                    </div>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-400 uppercase">Wedding ID</label>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Wedding ID</label>
                     <input
                       type="text"
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-boda-text outline-none font-mono text-xs"
+                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:border-[#C5A065] outline-none font-mono text-xs text-gray-500"
                       value={editingUser.weddingId || ''}
                       onChange={e => setEditingUser({ ...editingUser, weddingId: e.target.value })}
                       placeholder="Ninguna"
@@ -324,9 +348,9 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-                  <button type="button" onClick={() => setEditingUser(null)} className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition">Cancelar</button>
-                  <button type="submit" disabled={actionLoading} className="px-6 py-2 bg-boda-text text-white font-bold rounded-lg hover:bg-black transition shadow-md">{actionLoading ? 'Guardando...' : 'Guardar Cambios'}</button>
+                <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-50">
+                  <button type="button" onClick={() => setEditingUser(null)} className="px-5 py-3 text-gray-400 text-xs font-bold uppercase tracking-wider hover:text-gray-600 transition">Cancelar</button>
+                  <button type="submit" disabled={actionLoading} className="px-6 py-3 bg-[#333] text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-black transition shadow-lg">{actionLoading ? 'Guardando...' : 'Guardar Cambios'}</button>
                 </div>
               </form>
             </div>
@@ -335,25 +359,25 @@ export default function AdminDashboard() {
 
         {/* MODAL CREATE WEDDING */}
         {showCreateModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl scale-100 animate-scale-up relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-2 bg-boda-accent"></div>
-              <h2 className="text-2xl font-serif font-bold text-gray-800 mb-6">Crear Boda de Prueba</h2>
-              <form onSubmit={handleCreateTestWedding} className="space-y-4">
+          <div className="fixed inset-0 bg-[#333]/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-0 md:p-4 animate-fade-in">
+            <div className="bg-white rounded-t-3xl md:rounded-3xl p-8 max-w-md w-full shadow-2xl scale-100 animate-slide-up-mobile md:animate-scale-up relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-[#333]"></div>
+              <h2 className="text-2xl font-display text-[#333] mb-8">Crear Boda de Prueba</h2>
+              <form onSubmit={handleCreateTestWedding} className="space-y-6">
                 <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase">Pareja</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input required placeholder="Novio/a 1" type="text" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-boda-text outline-none" value={newWeddingData.novio1} onChange={e => setNewWeddingData({ ...newWeddingData, novio1: e.target.value })} />
-                    <input required placeholder="Novio/a 2" type="text" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-boda-text outline-none" value={newWeddingData.novio2} onChange={e => setNewWeddingData({ ...newWeddingData, novio2: e.target.value })} />
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Pareja</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input required placeholder="Novio/a 1" type="text" className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:border-[#C5A065] outline-none transition" value={newWeddingData.novio1} onChange={e => setNewWeddingData({ ...newWeddingData, novio1: e.target.value })} />
+                    <input required placeholder="Novio/a 2" type="text" className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:border-[#C5A065] outline-none transition" value={newWeddingData.novio2} onChange={e => setNewWeddingData({ ...newWeddingData, novio2: e.target.value })} />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase">Fecha</label>
-                  <input required type="date" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-boda-text outline-none" value={newWeddingData.fecha} onChange={e => setNewWeddingData({ ...newWeddingData, fecha: e.target.value })} />
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Fecha</label>
+                  <input required type="date" className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:border-[#C5A065] outline-none transition font-mono text-sm" value={newWeddingData.fecha} onChange={e => setNewWeddingData({ ...newWeddingData, fecha: e.target.value })} />
                 </div>
-                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-                  <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition">Cancelar</button>
-                  <button type="submit" disabled={actionLoading} className="px-6 py-2 bg-boda-text text-white font-bold rounded-lg hover:bg-black transition shadow-md">{actionLoading ? '...' : 'Crear'}</button>
+                <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-50">
+                  <button type="button" onClick={() => setShowCreateModal(false)} className="px-5 py-3 text-gray-400 text-xs font-bold uppercase tracking-wider hover:text-gray-600 transition">Cancelar</button>
+                  <button type="submit" disabled={actionLoading} className="px-6 py-3 bg-[#333] text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-black transition shadow-lg">{actionLoading ? '...' : 'Crear Boda'}</button>
                 </div>
               </form>
             </div>
