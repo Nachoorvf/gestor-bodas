@@ -23,6 +23,7 @@ export default function DashboardLayout({ children }) {
     const navItems = [
         { name: 'Resumen', href: '/dashboard' },
         { name: 'Invitados', href: '/dashboard/invitados' },
+        { name: 'Respuestas', href: '/dashboard/respuestas' },
         { name: 'Mesas', href: '/dashboard/mesas' },
         { name: 'Autobús', href: '/dashboard/bus' },
         { name: 'Presupuesto', href: '/dashboard/presupuesto' },

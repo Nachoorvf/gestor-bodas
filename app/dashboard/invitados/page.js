@@ -4,7 +4,7 @@ import { db } from '../../../firebase/config';
 import { doc, updateDoc, onSnapshot, query, orderBy, collection, addDoc, deleteDoc, writeBatch, getDoc, arrayUnion } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
-import { Search, Mail, Phone, Users, Check, X, Clock, Bus, Plus, Trash2, Edit2, Link, MessageCircle, ChevronLeft } from 'lucide-react';
+import { Search, Mail, Phone, Users, Check, X, Clock, Bus, Plus, Trash2, Edit2, Link, MessageCircle, ChevronLeft, Music, MessageSquare } from 'lucide-react';
 
 export default function InvitadosPage() {
     const router = useRouter();
@@ -361,7 +361,7 @@ export default function InvitadosPage() {
             </div>
 
             {/* QUICK FILTERS (MOBILE FIRST) */}
-            <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none px-4 md:px-0 -mx-4 md:mx-0 snap-x">
+            <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none px-4 md:px-0 snap-x">
                 {[
                     { id: 'all', label: 'Todos', icon: Users, color: 'text-gray-600', bg: 'bg-white border-gray-200' },
                     { id: 'pending', label: 'Pendientes', icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50 border-orange-100/50' },
@@ -374,9 +374,9 @@ export default function InvitadosPage() {
                         <button
                             key={f.id}
                             onClick={() => setFilterStatus(f.id)}
-                            className={`snap-start shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-full border text-sm font-bold transition-all shadow-sm ${isActive ? 'bg-[#333] text-white border-[#333]' : f.bg} ${isActive ? '' : 'text-gray-500'}`}
+                            className={`snap-start shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full border text-xs font-bold transition-all shadow-sm ${isActive ? 'bg-[#333] text-white border-[#333]' : f.bg} ${isActive ? '' : 'text-gray-500'}`}
                         >
-                            <Icon size={14} className={isActive ? 'text-white' : undefined} /> {f.label}
+                            <Icon size={12} className={isActive ? 'text-white' : undefined} /> {f.label}
                         </button>
                     )
                 })}
@@ -497,9 +497,12 @@ export default function InvitadosPage() {
                                                     <p className="font-bold text-[#333] text-base truncate">{guest.nombre}</p>
                                                     {guest.role && <span className="hidden md:inline-flex text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium">{guest.role}</span>}
                                                 </div>
-                                                <p className="text-[11px] md:text-xs text-gray-400 truncate">{guest.group || 'Sin Sobre'}</p>
-                                                {guest.role && <span className="md:hidden inline-block mt-1 text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium">{guest.role}</span>}
-                                            </div>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <p className="text-[11px] md:text-xs text-gray-400 truncate">{guest.group || 'Sin Sobre'}</p>
+                                                    {guest.cancion && <span className="flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded truncate max-w-[120px]" title={`Canción: ${guest.cancion}`}><Music size={10} shrink-0 /> <span className="truncate">{guest.cancion}</span></span>}
+                                                    {guest.mensaje && <span className="flex items-center gap-1 text-[10px] text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded truncate max-w-[120px]" title={`Mensaje: "${guest.mensaje}"`}><MessageSquare size={10} shrink-0 /> <span className="truncate">Mensaje</span></span>}
+                                                    {guest.role && <span className="md:hidden text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium">{guest.role}</span>}
+                                                </div>                                            </div>
                                         </div>
 
                                         {/* QUICK ACTIONS MOBILE FIRST */}
@@ -538,7 +541,11 @@ export default function InvitadosPage() {
                                                     onClick={() => handleSelectGuestFromList(guest)}
                                                     className={`p-3 md:p-2 rounded-lg cursor-pointer transition flex items-center justify-between ${selectedInvitationId === guest.invitationId ? 'bg-white shadow-sm border border-gray-100' : 'hover:bg-white/50'}`}
                                                 >
-                                                    <span className="text-base md:text-sm font-medium text-gray-700">{guest.nombre}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-base md:text-sm font-medium text-gray-700">{guest.nombre}</span>
+                                                        {guest.cancion && <Music size={12} className="text-amber-500" title={`Canción: ${guest.cancion}`} />}
+                                                        {guest.mensaje && <MessageSquare size={12} className="text-teal-500" title={`Mensaje: "${guest.mensaje}"`} />}
+                                                    </div>
                                                     <div className={`w-2 h-2 rounded-full ${guest.confirmado ? 'bg-green-500' : (guest.confirmado === false ? 'bg-red-500' : 'bg-gray-300')}`}></div>
                                                 </div>
                                             ))}
