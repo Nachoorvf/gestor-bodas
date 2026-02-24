@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../../../../firebase/config';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
-import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy, Clock, Image as ImageIcon } from 'lucide-react';
+import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy, Clock, Image as ImageIcon, Music, MessageSquare, Send } from 'lucide-react';
 
 export default function InvitationPublicPage() {
     const { weddingId, invitationId } = useParams();
@@ -18,6 +18,21 @@ export default function InvitationPublicPage() {
     // MODAL STATES
     const [activeModal, setActiveModal] = useState(null); // 'rsvp' | 'timeline' | 'gift'
     const [notification, setNotification] = useState(null); // { message, type: 'success'|'error' }
+
+    // INDEPENDENT BLOCKS STATE
+    const [songInputs, setSongInputs] = useState({});
+    const [messageInputs, setMessageInputs] = useState({});
+    const [selectedGuestForSong, setSelectedGuestForSong] = useState('');
+    const [selectedGuestForMessage, setSelectedGuestForMessage] = useState('');
+    const [submittingSong, setSubmittingSong] = useState(false);
+    const [submittingMessage, setSubmittingMessage] = useState(false);
+
+    useEffect(() => {
+        if (guests && guests.length > 0) {
+            if (!selectedGuestForSong) setSelectedGuestForSong(guests[0].id);
+            if (!selectedGuestForMessage) setSelectedGuestForMessage(guests[0].id);
+        }
+    }, [guests]);
 
     // Toast Timer
     useEffect(() => {
@@ -35,6 +50,16 @@ export default function InvitationPublicPage() {
             try {
                 const wSnap = await getDoc(doc(db, 'weddings', weddingId));
                 if (wSnap.exists()) setWeddingData(wSnap.data());
+
+                if (invitationId === 'preview') {
+                    setInvitation({ id: 'preview', guestInfo: { name: 'Modo Previsualización' } });
+                    setGuests([
+                        { id: 'demo1', nombre: 'Invitado de Prueba 1' },
+                        { id: 'demo2', nombre: 'Invitado de Prueba 2' }
+                    ]);
+                    setLoading(false);
+                    return;
+                }
 
                 const invSnap = await getDoc(doc(db, 'weddings', weddingId, 'invitations', invitationId));
                 if (!invSnap.exists()) {
@@ -79,11 +104,46 @@ export default function InvitationPublicPage() {
     }, []);
 
     // Handlers
+    const handleSaveSongBlock = async (blockId) => {
+        if (!selectedGuestForSong || !songInputs[blockId]) return;
+        setSubmittingSong(true);
+        try {
+            if (invitationId !== 'preview') {
+                const guestRef = doc(db, 'weddings', weddingId, 'guests', selectedGuestForSong);
+                await updateDoc(guestRef, { cancion: songInputs[blockId] });
+            }
+            setNotification({ message: "¡Canción enviada a la lista!", type: 'success' });
+            setSongInputs(prev => ({ ...prev, [blockId]: '' }));
+        } catch (error) {
+            console.error(error);
+            setNotification({ message: "Error al enviar la canción", type: 'error' });
+        } finally {
+            setSubmittingSong(false);
+        }
+    };
+
+    const handleSaveMessageBlock = async (blockId) => {
+        if (!selectedGuestForMessage || !messageInputs[blockId]) return;
+        setSubmittingMessage(true);
+        try {
+            if (invitationId !== 'preview') {
+                const guestRef = doc(db, 'weddings', weddingId, 'guests', selectedGuestForMessage);
+                await updateDoc(guestRef, { mensaje: messageInputs[blockId] });
+            }
+            setNotification({ message: "¡Mensaje guardado en el libro!", type: 'success' });
+            setMessageInputs(prev => ({ ...prev, [blockId]: '' }));
+        } catch (error) {
+            console.error(error);
+            setNotification({ message: "Error al enviar el mensaje", type: 'error' });
+        } finally {
+            setSubmittingMessage(false);
+        }
+    };
     const updateGuestState = (guestId, field, value) => {
         setGuests(prev => prev.map(g => {
             if (g.id !== guestId) return g;
             if (field === 'confirmado' && value === false) {
-                return { ...g, confirmado: false, bus: false };
+                return { ...g, confirmado: false, bus: false, alergias: '' };
             }
             return { ...g, [field]: value };
         }));
@@ -94,8 +154,12 @@ export default function InvitationPublicPage() {
         try {
             const batch = writeBatch(db);
             guests.forEach(g => {
-                const ref = doc(db, 'weddings', weddingId, 'guests', g.id);
-                batch.update(ref, { confirmado: g.confirmado, bus: g.bus });
+                const guestRef = doc(db, 'weddings', weddingId, 'guests', g.id);
+                batch.update(guestRef, {
+                    confirmado: g.confirmado,
+                    bus: g.bus || false,
+                    alergias: g.alergias || ''
+                });
             });
             await batch.commit();
             setNotification({ message: "¡Muchas gracias! Asistencia confirmada.", type: 'success' });
@@ -211,6 +275,79 @@ export default function InvitationPublicPage() {
 
                                 {item.type === 'gallery' && (
                                     <GalleryBlock images={item.content} title={item.title} />
+                                )}
+
+                                {item.type === 'song' && (
+                                    <div className="bg-white/60 backdrop-blur rounded-2xl p-6 border border-white/50 shadow-sm space-y-4">
+                                        <div className="flex items-center gap-3 justify-center mb-2">
+                                            <Music className="text-[var(--primary)]" size={24} />
+                                            <h3 className="font-display text-2xl text-[#333]">{item.title || 'Sugerir Canción'}</h3>
+                                        </div>
+                                        {guests.length > 1 && (
+                                            <div className="relative">
+                                                <select
+                                                    value={selectedGuestForSong}
+                                                    onChange={(e) => setSelectedGuestForSong(e.target.value)}
+                                                    className="w-full bg-white/50 border border-white/80 text-[#333] text-sm rounded-xl px-4 py-3 appearance-none outline-none focus:border-[var(--primary)] transition shadow-inner font-serif"
+                                                >
+                                                    {guests.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                                                </select>
+                                                <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                            </div>
+                                        )}
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="Ej: Danza Kuduro - Don Omar"
+                                                value={songInputs[item.id] || ''}
+                                                onChange={(e) => setSongInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                                className="flex-1 bg-white border border-white/80 rounded-xl px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition shadow-inner"
+                                            />
+                                            <button
+                                                onClick={() => handleSaveSongBlock(item.id)}
+                                                disabled={!songInputs[item.id] || submittingSong}
+                                                className="bg-[#333] text-white px-4 rounded-xl hover:bg-black transition flex items-center justify-center disabled:opacity-50"
+                                            >
+                                                {submittingSong ? <div className="w-5 h-5 border-2 border-white rounded-full border-t-transparent animate-spin" /> : <Send size={18} />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {item.type === 'message' && (
+                                    <div className="bg-white/60 backdrop-blur rounded-2xl p-6 border border-white/50 shadow-sm space-y-4">
+                                        <div className="flex items-center gap-3 justify-center mb-2">
+                                            <MessageSquare className="text-[var(--primary)]" size={24} />
+                                            <h3 className="font-display text-2xl text-[#333]">{item.title || 'Libro de Firmas'}</h3>
+                                        </div>
+                                        {guests.length > 1 && (
+                                            <div className="relative">
+                                                <select
+                                                    value={selectedGuestForMessage}
+                                                    onChange={(e) => setSelectedGuestForMessage(e.target.value)}
+                                                    className="w-full bg-white/50 border border-white/80 text-[#333] text-sm rounded-xl px-4 py-3 appearance-none outline-none focus:border-[var(--primary)] transition shadow-inner font-serif"
+                                                >
+                                                    {guests.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                                                </select>
+                                                <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                            </div>
+                                        )}
+                                        <div className="space-y-3">
+                                            <textarea
+                                                placeholder="Dejad aquí vuestros mejores deseos..."
+                                                value={messageInputs[item.id] || ''}
+                                                onChange={(e) => setMessageInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                                className="w-full bg-white border border-white/80 rounded-xl px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition shadow-inner resize-none h-24"
+                                            />
+                                            <button
+                                                onClick={() => handleSaveMessageBlock(item.id)}
+                                                disabled={!messageInputs[item.id] || submittingMessage}
+                                                className="w-full bg-[#333] text-white py-3 rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-black transition flex items-center justify-center gap-2 disabled:opacity-50"
+                                            >
+                                                {submittingMessage ? 'Enviando...' : <>Dejar Mensaje <Send size={14} /></>}
+                                            </button>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         );
@@ -342,15 +479,22 @@ export default function InvitationPublicPage() {
                                                 <button onClick={() => updateGuestState(guest.id, 'confirmado', true)} className={`py-3 px-4 rounded-xl border-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${guest.confirmado === true ? 'border-[var(--primary)] bg-[var(--primary)] text-white' : 'border-gray-100 bg-white text-gray-400 hover:border-gray-300'}`}>{guest.confirmado === true && <Check size={14} />} Sí, voy</button>
                                                 <button onClick={() => updateGuestState(guest.id, 'confirmado', false)} className={`py-3 px-4 rounded-xl border-2 text-xs font-bold uppercase tracking-wider transition-all ${guest.confirmado === false ? 'border-gray-200 bg-gray-100 text-gray-500' : 'border-gray-100 bg-white text-gray-400 hover:border-gray-300'}`}>No puedo</button>
                                             </div>
-                                            {weddingData?.busConfig?.enabled && (
-                                                <div className={`pl-11 transition-all duration-300 overflow-hidden ${guest.confirmado === true ? 'max-h-20 opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
+                                            <div className={`pl-11 transition-all duration-500 overflow-hidden ${guest.confirmado === true ? 'max-h-[500px] opacity-100 mt-4 space-y-4' : 'max-h-0 opacity-0 mt-0 space-y-0'}`}>
+                                                {weddingData?.busConfig?.enabled && (
                                                     <label className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl cursor-pointer hover:bg-stone-100 transition border border-transparent hover:border-stone-200">
                                                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${guest.bus ? 'bg-[var(--primary)] border-[var(--primary)]' : 'bg-white border-gray-300'}`}>{guest.bus && <Check size={12} className="text-white" />}</div>
                                                         <input type="checkbox" checked={guest.bus || false} onChange={(e) => updateGuestState(guest.id, 'bus', e.target.checked)} className="hidden" />
                                                         <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Necesitaré Autobús</span>
                                                     </label>
-                                                </div>
-                                            )}
+                                                )}
+
+                                                {weddingData?.invitationConfig?.rsvp?.askAllergies !== false && (
+                                                    <div className="animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Alergias o Menú Especial</p>
+                                                        <input type="text" placeholder="Ej: Celíaco, Vegano, etc..." className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[var(--primary)] focus:bg-white transition shadow-inner" value={guest.alergias || ''} onChange={(e) => updateGuestState(guest.id, 'alergias', e.target.value)} />
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                     <div className="pt-6">

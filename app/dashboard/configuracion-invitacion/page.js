@@ -8,7 +8,7 @@ import { useAuth } from '../../../context/AuthContext';
 import {
     MapPin, Calendar, Gift, Type, Image as ImageIcon, Video,
     Clock, Images, Trash2, Plus, ChevronUp, ChevronDown,
-    Palette, Layout, Smartphone, AlignLeft, MousePointerClick, GripVertical, Eye, X
+    Palette, Layout, Smartphone, AlignLeft, MousePointerClick, GripVertical, Eye, X, Check, Music, MessageSquare
 } from 'lucide-react';
 
 export default function InvitationConfigPage() {
@@ -29,6 +29,7 @@ export default function InvitationConfigPage() {
         location: { enabled: false, address: '', mapUrl: '', title: 'Ubicación', order: 1 },
         bank: { enabled: false, iban: '', message: '', title: 'Regalo', order: 3 },
         timeline: { enabled: false, events: [], title: 'Agenda', order: 2 },
+        rsvp: { enabled: true, askAllergies: true, askSong: true, askMessage: true, title: 'Formulario de Asistencia', order: 4 },
         bus: { enabled: false },
         design: {
             primaryColor: '#C5A065', // Gold default
@@ -63,6 +64,7 @@ export default function InvitationConfigPage() {
                                 ...fetched,
                                 location: { ...prev.location, ...fetched.location },
                                 timeline: { ...prev.timeline, ...fetched.timeline },
+                                rsvp: { ...(prev.rsvp || { enabled: true, askAllergies: true, askSong: true, askMessage: true, title: 'Formulario de Asistencia', order: 4 }), ...fetched.rsvp },
                                 bank: { ...prev.bank, ...fetched.bank },
                                 design: { ...prev.design, ...fetched.design },
                                 customBlocks: fetched.customBlocks || []
@@ -75,6 +77,8 @@ export default function InvitationConfigPage() {
                         if (!snapInv.empty) {
                             const demoId = snapInv.docs[0].id;
                             setPreviewUrl(`/invitacion/${wId}/${demoId}`);
+                        } else {
+                            setPreviewUrl(`/invitacion/${wId}/preview`);
                         }
                     }
                 } catch (error) {
@@ -124,7 +128,7 @@ export default function InvitationConfigPage() {
 
     // --- HELPER: UNIFIED LIST OF ITEMS ---
     const getAllItems = () => {
-        const fixed = ['location', 'timeline', 'bank'].map(key => ({
+        const fixed = ['location', 'timeline', 'bank', 'rsvp'].map(key => ({
             id: key,
             type: 'fixed',
             order: config[key]?.order || 99,
@@ -197,6 +201,10 @@ export default function InvitationConfigPage() {
         } else if (type === 'gallery') {
             initialTitle = 'Nuestra Historia';
             initialContent = [];
+        } else if (type === 'song') {
+            initialTitle = 'Sugerir Canción';
+        } else if (type === 'message') {
+            initialTitle = 'Libro de Firmas';
         }
 
         const newBlock = {
@@ -290,22 +298,25 @@ export default function InvitationConfigPage() {
             if (item.id === 'location') return <MapPin className="w-5 h-5 text-[#C5A065]" />;
             if (item.id === 'timeline') return <Calendar className="w-5 h-5 text-[#C5A065]" />;
             if (item.id === 'bank') return <Gift className="w-5 h-5 text-[#C5A065]" />;
+            if (item.id === 'rsvp') return <Check className="w-5 h-5 text-[#C5A065]" />;
         } else {
             if (item.type === 'text') return <Type className="w-5 h-5 text-gray-500" />;
             if (item.type === 'image') return <ImageIcon className="w-5 h-5 text-gray-500" />;
             if (item.type === 'video') return <Video className="w-5 h-5 text-gray-500" />;
             if (item.type === 'countdown') return <Clock className="w-5 h-5 text-indigo-500" />;
             if (item.type === 'gallery') return <Images className="w-5 h-5 text-pink-500" />;
+            if (item.type === 'song') return <Music className="w-5 h-5 text-amber-500" />;
+            if (item.type === 'message') return <MessageSquare className="w-5 h-5 text-teal-500" />;
         }
         return <Layout className="w-5 h-5 text-gray-400" />;
     };
 
     return (
-        <div className="flex flex-col lg:flex-row gap-8 h-screen max-h-[calc(100vh-100px)] overflow-hidden bg-white">
+        <div className="flex flex-col lg:flex-row gap-8 min-h-[calc(100dvh-70px)] md:h-[calc(100dvh-100px)] lg:max-h-[calc(100dvh-100px)] overflow-x-hidden bg-white">
 
             {/* LEFT: EDITOR PANEL */}
             <div className="flex-1 flex flex-col min-h-0 relative">
-                <div className="flex-1 overflow-y-auto px-6 py-8 space-y-10 scrollbar-thin scrollbar-thumb-gray-200">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 md:px-6 md:py-8 space-y-10 scrollbar-thin scrollbar-thumb-gray-200">
 
                     {/* Header Section */}
                     <div className="mb-2">
@@ -336,7 +347,7 @@ export default function InvitationConfigPage() {
                                     <X size={20} />
                                 </button>
                             </div>
-                            <div className="flex-1 overflow-hidden relative bg-white">
+                            <div className="flex-1 overflow-auto relative bg-white">
                                 {previewUrl ? (
                                     <iframe
                                         src={previewUrl}
@@ -353,132 +364,149 @@ export default function InvitationConfigPage() {
                     )}
 
                     {/* MODULE: DESIGN STUDIO (Level 1) */}
-                    <div className="p-6 rounded-2xl border border-gray-100 bg-white shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] hover:shadow-lg transition-all duration-300">
-                        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50">
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-3 pb-2 border-b border-gray-100">
                             <div className="w-8 h-8 rounded-full bg-[#C5A065]/10 flex items-center justify-center">
-                                <MousePointerClick className="w-4 h-4 text-[#C5A065]" />
+                                <Palette className="w-4 h-4 text-[#C5A065]" />
                             </div>
-                            <h3 className="font-display text-lg text-[#333]">Estilo Global</h3>
+                            <h3 className="font-display text-xl text-[#333]">Ajustes Generales</h3>
                         </div>
 
-                        <div className="space-y-8">
-                            {/* Color Picker */}
-                            <div className="flex items-center justify-between group">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-[#333] transition-colors">Color Principal</label>
-                                <div className="flex items-center gap-3 bg-gray-50 pl-3 pr-1 py-1 rounded-full border border-gray-200">
-                                    <span className="text-xs font-mono text-gray-500 uppercase">{config.design?.primaryColor}</span>
-                                    <div className="relative w-8 h-8 rounded-full overflow-hidden shadow-sm border border-white box-content">
-                                        <input
-                                            type="color"
-                                            value={config.design?.primaryColor || '#C5A065'}
-                                            onChange={(e) => updateModule('design', 'primaryColor', e.target.value)}
-                                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] cursor-pointer p-0 border-0"
-                                        />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                            {/* CARD: APARIENCIA */}
+                            <div className="p-4 md:p-5 rounded-xl border border-gray-100 bg-gray-50/50 shadow-sm space-y-6">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <ImageIcon size={14} className="text-gray-400" />
+                                    <h4 className="text-xs font-bold uppercase tracking-widest text-[#333]">Apariencia Visual</h4>
+                                </div>
+                                {/* Color Picker */}
+                                <div className="flex items-center justify-between group">
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-[#333] transition-colors">Color Principal</label>
+                                    <div className="flex items-center gap-3 bg-gray-50 pl-3 pr-1 py-1 rounded-full border border-gray-200">
+                                        <span className="text-xs font-mono text-gray-500 uppercase">{config.design?.primaryColor}</span>
+                                        <div className="relative w-8 h-8 rounded-full overflow-hidden shadow-sm border border-white box-content">
+                                            <input
+                                                type="color"
+                                                value={config.design?.primaryColor || '#C5A065'}
+                                                onChange={(e) => updateModule('design', 'primaryColor', e.target.value)}
+                                                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] cursor-pointer p-0 border-0"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Typography Selector */}
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tipografía</label>
+                                    <div className="grid grid-cols-3 gap-2 md:gap-3">
+                                        {[
+                                            { id: 'serif', label: 'Elegante', font: 'font-serif' },
+                                            { id: 'sans', label: 'Moderna', font: 'font-sans' },
+                                            { id: 'script', label: 'Romántica', font: 'font-script' }
+                                        ].map((font) => (
+                                            <button
+                                                key={font.id}
+                                                onClick={() => updateModule('design', 'fontPair', font.id)}
+                                                className={`py-3 px-1 md:px-2 rounded-xl border text-xs md:text-sm transition-all duration-300 ${config.design?.fontPair === font.id
+                                                    ? 'border-[#333] bg-[#333] text-white shadow-md transform scale-[1.02]'
+                                                    : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-300 hover:bg-white'
+                                                    }`}
+                                            >
+                                                <span className={font.font}>{font.label}</span>
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Welcome Message Input (Top) */}
-                            <TextInput
-                                label="Mensaje Superior (Ej: Estás invitado a...)"
-                                value={config.design?.welcomeMessage}
-                                onChange={(e) => updateModule('design', 'welcomeMessage', e.target.value)}
-                                placeholder="Estás invitado a la boda de"
-                                icon={<Type size={14} />}
-                            />
-
-                            {/* Celebration Quote Input */}
-                            <div className="relative">
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Frase de Celebración</label>
-                                <textarea
-                                    value={config.design?.celebrationMessage || ''}
-                                    onChange={(e) => updateModule('design', 'celebrationMessage', e.target.value)}
-                                    placeholder="¡Queremos celebrar el amor con la gente que más queremos!"
-                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#333] focus:ring-1 focus:ring-[#333]/10 text-sm font-serif h-20 resize-none transition"
-                                />
-                            </div>
-
-                            {/* Background Image Input */}
-                            <div className="space-y-3">
+                            {/* CARD: TEXTOS GENERALES */}
+                            <div className="p-4 md:p-5 rounded-xl border border-gray-100 bg-gray-50/50 shadow-sm space-y-6">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Type size={14} className="text-gray-400" />
+                                    <h4 className="text-xs font-bold uppercase tracking-widest text-[#333]">Textos de Portada</h4>
+                                </div>
+                                {/* Welcome Message Input (Top) */}
                                 <TextInput
-                                    label="Imagen de Fondo (URL)"
-                                    value={config.design?.backgroundImage}
-                                    onChange={(e) => updateModule('design', 'backgroundImage', e.target.value)}
-                                    placeholder="https://..."
-                                    icon={<ImageIcon size={14} />}
+                                    label="Mensaje Superior (Ej: Estás invitado a...)"
+                                    value={config.design?.welcomeMessage}
+                                    onChange={(e) => updateModule('design', 'welcomeMessage', e.target.value)}
+                                    placeholder="Estás invitado a la boda de"
                                 />
-                                <div className="text-[10px] text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 mt-2">
-                                    <p className="font-bold text-[#333] mb-1">ℹ️ O sube una foto directamente:</p>
-                                    <label className={`mt-2 flex items-center justify-center px-4 py-2 bg-white border border-gray-200 hover:border-[#333] hover:bg-gray-50 text-xs font-bold uppercase tracking-wider text-[#333] rounded-lg cursor-pointer transition w-full shadow-sm ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                        <ImageIcon size={14} className="mr-2" />
-                                        {uploadingImage ? 'Subiendo...' : 'Seleccionar desde mi dispositivo'}
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            disabled={uploadingImage}
-                                            onChange={async (e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) {
-                                                    const url = await handleImageUpload(file, 'backgrounds');
-                                                    if (url) updateModule('design', 'backgroundImage', url);
-                                                }
-                                            }}
-                                        />
-                                    </label>
-                                </div>
-                            </div>
 
-                            {/* Typography Selector */}
-                            <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tipografía</label>
-                                <div className="grid grid-cols-3 gap-3">
-                                    {[
-                                        { id: 'serif', label: 'Elegante', font: 'font-serif' },
-                                        { id: 'sans', label: 'Moderna', font: 'font-sans' },
-                                        { id: 'script', label: 'Romántica', font: 'font-script' }
-                                    ].map((font) => (
-                                        <button
-                                            key={font.id}
-                                            onClick={() => updateModule('design', 'fontPair', font.id)}
-                                            className={`py-3 px-2 rounded-xl border text-sm transition-all duration-300 ${config.design?.fontPair === font.id
-                                                ? 'border-[#333] bg-[#333] text-white shadow-md transform scale-[1.02]'
-                                                : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-300 hover:bg-white'
-                                                }`}
-                                        >
-                                            <span className={font.font}>{font.label}</span>
-                                        </button>
-                                    ))}
+                                {/* Celebration Quote Input */}
+                                <div className="relative">
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Frase de Celebración</label>
+                                    <textarea
+                                        value={config.design?.celebrationMessage || ''}
+                                        onChange={(e) => updateModule('design', 'celebrationMessage', e.target.value)}
+                                        placeholder="¡Queremos celebrar el amor con la gente que más queremos!"
+                                        className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-[#333] focus:ring-1 focus:ring-[#333]/10 text-sm font-serif h-20 resize-none transition shadow-inner"
+                                    />
                                 </div>
-                            </div>
-
-                            {/* Overlay Opacity */}
-                            <div>
-                                <div className="flex justify-between mb-3">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Intensidad del Fondo</label>
-                                    <span className="text-xs font-bold text-[#333] bg-gray-100 px-2 py-0.5 rounded-md">{config.design?.overlayOpacity || 50}%</span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min="0" max="90"
-                                    value={config.design?.overlayOpacity || 50}
-                                    onChange={(e) => updateModule('design', 'overlayOpacity', parseInt(e.target.value))}
-                                    className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-[#333]"
-                                />
                             </div>
                         </div>
+
+
+                    </div>
+
+                    {/* Background Image Input */}
+                    <div className="space-y-3">
+                        <TextInput
+                            label="Imagen de Fondo (URL)"
+                            value={config.design?.backgroundImage}
+                            onChange={(e) => updateModule('design', 'backgroundImage', e.target.value)}
+                            placeholder="https://..."
+                            icon={<ImageIcon size={14} />}
+                        />
+                        <div className="text-[10px] text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 mt-2">
+                            <p className="font-bold text-[#333] mb-1">ℹ️ O sube una foto directamente:</p>
+                            <label className={`mt-2 flex items-center justify-center px-4 py-2 bg-white border border-gray-200 hover:border-[#333] hover:bg-gray-50 text-xs font-bold uppercase tracking-wider text-[#333] rounded-lg cursor-pointer transition w-full shadow-sm ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                <ImageIcon size={14} className="mr-2" />
+                                {uploadingImage ? 'Subiendo...' : 'Seleccionar desde mi dispositivo'}
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={uploadingImage}
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const url = await handleImageUpload(file, 'backgrounds');
+                                            if (url) updateModule('design', 'backgroundImage', url);
+                                        }
+                                    }}
+                                />
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Overlay Opacity */}
+                    <div className="pt-2 border-t border-gray-100">
+                        <div className="flex justify-between mb-3">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Intensidad del Fondo Oscuro</label>
+                            <span className="text-[10px] font-bold text-[#333] bg-white px-2 py-0.5 rounded-md border border-gray-100">{config.design?.overlayOpacity || 50}%</span>
+                        </div>
+                        <input
+                            type="range"
+                            min="0" max="90"
+                            value={config.design?.overlayOpacity || 50}
+                            onChange={(e) => updateModule('design', 'overlayOpacity', parseInt(e.target.value))}
+                            className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#333]"
+                        />
                     </div>
 
                     {/* BLOCK TOOLBAR */}
                     <div className="space-y-4">
                         <p className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Añadir Contenido</p>
-                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2 md:gap-3">
                             <ToolbarBtn icon={<AlignLeft size={16} />} label="Texto" onClick={() => addBlock('text')} />
                             <ToolbarBtn icon={<ImageIcon size={16} />} label="Imagen" onClick={() => addBlock('image')} />
                             <ToolbarBtn icon={<Video size={16} />} label="Video" onClick={() => addBlock('video')} />
-                            <div className="w-[1px] bg-gray-200 mx-auto hidden sm:block"></div>
-                            <ToolbarBtn icon={<Clock size={16} />} label="Cuenta Atrás" onClick={() => addBlock('countdown')} color="text-indigo-600 bg-indigo-50 hover:bg-indigo-100" />
+                            <ToolbarBtn icon={<Clock size={16} />} label="T.Restante" onClick={() => addBlock('countdown')} color="text-indigo-600 bg-indigo-50 hover:bg-indigo-100" />
                             <ToolbarBtn icon={<Images size={16} />} label="Galería" onClick={() => addBlock('gallery')} color="text-pink-600 bg-pink-50 hover:bg-pink-100" />
+                            <ToolbarBtn icon={<Music size={16} />} label="Canción" onClick={() => addBlock('song')} color="text-amber-600 bg-amber-50 hover:bg-amber-100" />
+                            <ToolbarBtn icon={<MessageSquare size={16} />} label="Mensajes" onClick={() => addBlock('message')} color="text-teal-600 bg-teal-50 hover:bg-teal-100" />
                         </div>
                     </div>
 
@@ -490,7 +518,7 @@ export default function InvitationConfigPage() {
                             const icon = getBlockIcon(item);
 
                             return (
-                                <div key={item.id} className={`group relative p-6 rounded-2xl transition-all duration-300 border ${item.enabled
+                                <div key={item.id} className={`group relative p-4 md:p-5 rounded-xl transition-all duration-300 border ${item.enabled || item.id === 'rsvp'
                                     ? 'border-gray-200 bg-white shadow-sm hover:shadow-md'
                                     : 'border-gray-100 bg-gray-50/50 opacity-70'
                                     }`}>
@@ -501,9 +529,9 @@ export default function InvitationConfigPage() {
 
                                     {/* Header */}
                                     <div className="flex flex-col gap-4 mb-6 pl-4">
-                                        <div className="flex justify-between items-center">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${item.enabled ? 'bg-gray-50' : 'bg-white'}`}>
+                                        <div className="flex justify-between items-center w-full min-w-0">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${item.enabled ? 'bg-gray-50' : 'bg-white'}`}>
                                                     {icon}
                                                 </div>
                                                 {/* Renaming */}
@@ -511,12 +539,12 @@ export default function InvitationConfigPage() {
                                                     type="text"
                                                     value={item.title || ''}
                                                     onChange={(e) => item.isCustom ? updateCustomBlock(item.id, 'title', e.target.value) : updateModule(item.id, 'title', e.target.value)}
-                                                    className="font-display text-lg text-[#333] bg-transparent border-transparent focus:border-gray-200 border-b outline-none transition px-1 -ml-1 placeholder-gray-400 min-w-[150px]"
+                                                    className="font-display text-lg text-[#333] bg-transparent border-transparent focus:border-gray-200 border-b outline-none transition px-1 -ml-1 placeholder-gray-400 min-w-0 w-full"
                                                     placeholder="Título del bloque"
                                                 />
                                             </div>
 
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-2">
                                                 <div className="flex flex-col gap-1">
                                                     <button onClick={() => moveItem(item.id, 'up')} disabled={isFirst} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-[#333] disabled:opacity-20"><ChevronUp size={14} /></button>
                                                     <button onClick={() => moveItem(item.id, 'down')} disabled={isLast} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-[#333] disabled:opacity-20"><ChevronDown size={14} /></button>
@@ -527,17 +555,19 @@ export default function InvitationConfigPage() {
                                                     <button onClick={() => removeCustomBlock(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full text-red-300 hover:text-red-500 hover:bg-red-50 transition ml-2">
                                                         <Trash2 size={16} />
                                                     </button>
+                                                ) : item.id === 'rsvp' ? (
+                                                    <div className="px-2 py-1 bg-gray-100 rounded text-[10px] font-bold uppercase tracking-widest text-[#333] ml-2 select-none border border-gray-200">Obligatorio</div>
                                                 ) : (
-                                                    <Switch checked={item.enabled} onChange={() => toggleModule(item.id)} />
+                                                    <div className="ml-2"><Switch checked={item.enabled} onChange={() => toggleModule(item.id)} /></div>
                                                 )}
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* CONTENT RENDERERS */}
-                                    {item.enabled && (
+                                    {(item.enabled || item.id === 'rsvp') && (
                                         <div className="pl-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <div className="pt-6 border-t border-gray-50 space-y-6">
+                                            <div className="pt-4 border-t border-gray-50 space-y-6">
 
                                                 {/* --- FIXED MODULES --- */}
                                                 {!item.isCustom && item.id === 'location' && (
@@ -548,21 +578,22 @@ export default function InvitationConfigPage() {
                                                 )}
                                                 {!item.isCustom && item.id === 'timeline' && (
                                                     <div className="space-y-4">
-                                                        <div className="flex gap-3 items-end p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                                            <div className="w-28"><TextInput label="Hora" type="time" value={newEvent.time} onChange={e => setNewEvent({ ...newEvent, time: e.target.value })} /></div>
-                                                            <div className="flex-1"><TextInput label="Actividad" placeholder="Ej: Ceremonia" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} /></div>
-                                                            <button onClick={addEvent} className="h-[42px] w-[42px] bg-[#333] text-white rounded-lg hover:bg-black transition flex items-center justify-center shadow-md">
-                                                                <Plus size={20} />
+                                                        <div className="flex flex-col sm:flex-row gap-3 items-end p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                                            <div className="w-full sm:w-28"><TextInput label="Hora" type="time" value={newEvent.time} onChange={e => setNewEvent({ ...newEvent, time: e.target.value })} /></div>
+                                                            <div className="w-full sm:flex-1"><TextInput label="Actividad" placeholder="Ej: Ceremonia" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} /></div>
+                                                            <button onClick={addEvent} className="h-[42px] w-full sm:w-[42px] shrink-0 bg-[#333] text-white rounded-lg hover:bg-black transition flex items-center justify-center shadow-md">
+                                                                <Plus size={20} className="hidden sm:block" />
+                                                                <span className="sm:hidden font-bold text-xs uppercase tracking-widest">Añadir</span>
                                                             </button>
                                                         </div>
                                                         <div className="space-y-2">
                                                             {config.timeline.events?.map((ev, i) => (
                                                                 <div key={i} className="flex justify-between items-center bg-white p-3 px-4 rounded-lg border border-gray-100 shadow-sm hover:border-gray-200 transition">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <span className="font-mono text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded">{ev.time}</span>
-                                                                        <span className="font-display text-[#333]">{ev.title}</span>
+                                                                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                                                                        <span className="font-mono text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded shrink-0">{ev.time}</span>
+                                                                        <span className="font-display text-[#333] truncate min-w-0">{ev.title}</span>
                                                                     </div>
-                                                                    <button onClick={() => removeEvent(i)} className="text-gray-300 hover:text-red-400 px-2"><Trash2 size={14} /></button>
+                                                                    <button onClick={() => removeEvent(i)} className="text-gray-300 hover:text-red-400 p-1 shrink-0"><Trash2 size={14} /></button>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -580,6 +611,20 @@ export default function InvitationConfigPage() {
                                                             />
                                                         </div>
                                                         <TextInput label="Número de Cuenta (IBAN)" value={config.bank.iban} onChange={(e) => updateModule('bank', 'iban', e.target.value)} placeholder="ES00 0000..." icon={<Gift size={14} />} />
+                                                    </div>
+                                                )}
+                                                {!item.isCustom && item.id === 'rsvp' && (
+                                                    <div className="space-y-4">
+                                                        <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition border border-gray-100 shadow-sm">
+                                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${config.rsvp?.askAllergies !== false ? 'bg-[#333] border-[#333]' : 'bg-white border-gray-300'}`}>
+                                                                {config.rsvp?.askAllergies !== false && <Check size={12} className="text-white" />}
+                                                            </div>
+                                                            <input type="checkbox" checked={config.rsvp?.askAllergies !== false} onChange={(e) => updateModule('rsvp', 'askAllergies', e.target.checked)} className="hidden" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <span className="text-sm font-bold text-[#333] block truncate">Preguntar sobre Alergias y Dietas Especiales</span>
+                                                                <span className="text-xs text-gray-500 block truncate">Recomendado para organizar el menú del banquete seguro y sin sustos.</span>
+                                                            </div>
+                                                        </label>
                                                     </div>
                                                 )}
 
@@ -604,11 +649,11 @@ export default function InvitationConfigPage() {
                                                             onChange={(e) => updateCustomBlock(item.id, 'content', e.target.value)}
                                                             placeholder="https://..."
                                                         />
-                                                        <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 border-dashed">
-                                                            <div className="w-24 h-24 bg-white rounded-lg overflow-hidden shrink-0 border border-gray-200 flex items-center justify-center relative group">
+                                                        <div className="flex flex-col sm:flex-row items-start gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 border-dashed">
+                                                            <div className="w-full sm:w-24 h-48 sm:h-24 bg-white rounded-lg overflow-hidden shrink-0 border border-gray-200 flex items-center justify-center relative group">
                                                                 {item.content ? <img src={item.content} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={24} />}
                                                             </div>
-                                                            <div className="text-xs text-gray-500 space-y-3 flex-1">
+                                                            <div className="text-xs text-gray-500 space-y-3 w-full sm:flex-1">
                                                                 <p className="font-bold text-[#333]">O sube tu imagen desde aquí:</p>
                                                                 <label className={`flex items-center justify-center px-4 py-2 bg-white border border-gray-200 hover:border-[#333] hover:bg-gray-50 text-xs font-bold uppercase tracking-wider text-[#333] rounded-lg cursor-pointer transition w-full shadow-sm ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                                                     <ImageIcon size={14} className="mr-2" />
@@ -654,6 +699,22 @@ export default function InvitationConfigPage() {
                                                     </div>
                                                 )}
 
+                                                {item.isCustom && item.type === 'song' && (
+                                                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100/50 flex flex-col items-center justify-center text-center space-y-2 opacity-70 pointer-events-none">
+                                                        <Music className="w-8 h-8 text-amber-500 mb-1" />
+                                                        <p className="text-sm font-bold text-[#333]">Módulo: Sugerir Canción</p>
+                                                        <p className="text-[10px] text-gray-500">Muestra un campo de texto donde los invitados sugerirán canciones.</p>
+                                                    </div>
+                                                )}
+
+                                                {item.isCustom && item.type === 'message' && (
+                                                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100/50 flex flex-col items-center justify-center text-center space-y-2 opacity-70 pointer-events-none">
+                                                        <MessageSquare className="w-8 h-8 text-teal-500 mb-1" />
+                                                        <p className="text-sm font-bold text-[#333]">Módulo: Libro de Firmas</p>
+                                                        <p className="text-[10px] text-gray-500">Muestra una caja de texto donde tus invitados dejarán mensajes de felicitación.</p>
+                                                    </div>
+                                                )}
+
                                                 {item.isCustom && item.type === 'gallery' && (
                                                     <div className="space-y-4">
                                                         <div className="flex flex-wrap gap-3">
@@ -676,8 +737,8 @@ export default function InvitationConfigPage() {
 
                                                             {/* Add Image Input */}
                                                             <div className="w-full mt-2 space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                                                <div className="flex gap-2">
-                                                                    <div className="flex-1 relative">
+                                                                <div className="flex flex-col sm:flex-row gap-2">
+                                                                    <div className="flex-1 relative w-full">
                                                                         <input
                                                                             type="text"
                                                                             placeholder="Pegar enlace de la foto..."
@@ -695,7 +756,7 @@ export default function InvitationConfigPage() {
                                                                             setNewGalleryUrl({ ...newGalleryUrl, [item.id]: '' });
                                                                         }}
                                                                         disabled={!newGalleryUrl[item.id]}
-                                                                        className="px-4 bg-[#333] text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1 shadow-sm"
+                                                                        className="px-4 py-2.5 sm:py-0 w-full sm:w-auto bg-[#333] text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition flex justify-center items-center gap-1 shadow-sm"
                                                                     >
                                                                         <Plus size={14} /> Añadir URL
                                                                     </button>

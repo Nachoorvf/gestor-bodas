@@ -619,10 +619,13 @@ export default function InvitadosPage() {
                                                     {/* Bus Indicator in List */}
                                                     {member.bus && <span className="text-gray-400"><Bus size={14} /></span>}
                                                 </div>
-                                                <div className="flex gap-2 text-xs text-gray-400 mt-1">
-                                                    {member.telefono && <span className="flex items-center gap-1"><Phone size={10} /> {member.telefono}</span>}
+                                                <div className="flex flex-wrap gap-2 text-xs text-gray-400 mt-1">
+                                                    {member.telefono && <span className="flex items-center gap-1 bg-gray-50 px-2 rounded"><Phone size={10} /> {member.telefono}</span>}
                                                     {member.role && <span className="bg-gray-100 px-2 rounded text-gray-500 font-medium">{member.role}</span>}
+                                                    {member.alergias && <span className="bg-orange-50 text-orange-600 px-2 rounded font-medium border border-orange-100 whitespace-nowrap" title="Alergias">⚠️ {member.alergias}</span>}
                                                 </div>
+                                                {member.cancion && <div className="text-[10px] text-gray-500 mt-1.5 font-medium bg-gray-50 px-2 py-1 rounded-lg truncate flex items-center gap-1.5" title="Canción">🎵 {member.cancion}</div>}
+                                                {member.mensaje && <div className="text-[10px] text-gray-600 mt-1.5 italic font-serif bg-gray-50/50 px-2.5 py-1.5 rounded-lg border-l-2 border-gray-200">"{member.mensaje}"</div>}
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Edit2 size={14} className="text-[#333] opacity-0 group-hover:opacity-100 transition" />
@@ -760,6 +763,35 @@ export default function InvitadosPage() {
                                     onChange={e => setEditingGuest({ ...editingGuest, telefono: e.target.value })}
                                     placeholder="Sin teléfono"
                                 />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Alergias o Menú</label>
+                                    <input
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#333] transition"
+                                        value={editingGuest.alergias || ''}
+                                        onChange={e => setEditingGuest({ ...editingGuest, alergias: e.target.value })}
+                                        placeholder="Ej: Celíaco"
+                                    />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Canción Pedida</label>
+                                    <input
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#333] transition"
+                                        value={editingGuest.cancion || ''}
+                                        onChange={e => setEditingGuest({ ...editingGuest, cancion: e.target.value })}
+                                        placeholder="Canción propuesta..."
+                                    />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Mensaje de los invitados</label>
+                                    <textarea
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#333] transition resize-none h-16"
+                                        value={editingGuest.mensaje || ''}
+                                        onChange={e => setEditingGuest({ ...editingGuest, mensaje: e.target.value })}
+                                        placeholder="Mensaje de felicitación..."
+                                    />
+                                </div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Grupo / Etiqueta</label>
