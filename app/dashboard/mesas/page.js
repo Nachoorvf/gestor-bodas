@@ -15,23 +15,25 @@ const TABLE_PRESETS = {
     square: { width: 140, height: 140, shape: 'square', seats: 8, label: 'Cuadrada (8)' }
 };
 
-const GuestCard = ({ guest, selectedGuestId, setSelectedGuestId, setActiveTab, setDraggingGuest }) => (
+const GuestCard = ({ guest, selectedGuestId, setSelectedGuestId, setActiveTab, setDraggingGuest, isGroup, groupGuests }) => (
     <div
         draggable
         onDragStart={(e) => {
-            setDraggingGuest({ guest });
-            e.dataTransfer.setData("guestId", guest.id);
+            setDraggingGuest({ guest, isGroup, groupGuests });
+            e.dataTransfer.setData("guestId", isGroup ? `group_${guest.group}` : guest.id);
         }}
         onClick={() => {
-            setSelectedGuestId(selectedGuestId === guest.id ? null : guest.id);
+            setSelectedGuestId(selectedGuestId === (isGroup ? `group_${guest.group}` : guest.id) ? null : (isGroup ? `group_${guest.group}` : guest.id));
             if (window.innerWidth < 768) setActiveTab('map');
         }}
         className={`
             p-3 rounded-xl border cursor-grab active:cursor-grabbing hover:shadow-md transition-all flex items-center justify-between
-            ${selectedGuestId === guest.id ? 'bg-boda-text text-white border-boda-text' : 'bg-white border-gray-100 text-gray-600 hover:border-boda-green'}
+            ${selectedGuestId === (isGroup ? `group_${guest.group}` : guest.id) ? 'bg-boda-text text-white border-boda-text' : 'bg-white border-gray-100 text-gray-600 hover:border-boda-green'}
         `}
     >
-        <span className="font-medium text-sm">{guest.nombre}</span>
+        <span className="font-medium text-sm flex items-center gap-2">
+            {isGroup ? `${guest.group || 'Sin Sobre'} (${groupGuests.length})` : guest.nombre}
+        </span>
         <span className="text-xs opacity-50">:::</span>
     </div>
 );
@@ -57,9 +59,17 @@ export default function MesasPage() {
     const [groupingMode, setGroupingMode] = useState('group'); // 'all', 'group' (envelopes), 'role' (tags)
 
     // DRAGGING STATE
-    const [draggingGuest, setDraggingGuest] = useState(null); // { guest, sourceTableId }
+    const [draggingGuest, setDraggingGuest] = useState(null); // { guest, sourceTableId, isGroup, groupGuests }
 
     const canvasRef = useRef(null);
+
+    // Set mobile default zoom and pan
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.innerWidth < 768) {
+            setZoom(0.4);
+            setPan({ x: 20, y: 50 });
+        }
+    }, []);
 
     // 1. Auth Check
     useEffect(() => {
@@ -135,36 +145,71 @@ export default function MesasPage() {
     };
 
 
-    const assignGuest = async (guestId, tableId) => {
-        // Find the table to know its capacity
+    const assignGuest = async (guestIdOrGroupId, tableId, isDrop = false) => {
         const table = tables.find(t => t.id === tableId);
         if (!table) return;
 
-        // Find currently occupied seats
-        const seatedGuests = guests.filter(g => g.tableId === tableId && g.id !== guestId);
-        const occupiedSeats = seatedGuests.map(g => g.seatIndex).filter(i => i !== undefined);
+        let guestsToAssign = [];
+        const isGroupAssignment = guestIdOrGroupId.startsWith('group_');
 
-        // Find first available seat (0-based index)
-        let newSeatIndex = 0;
-        for (let i = 0; i < table.seats; i++) {
-            if (!occupiedSeats.includes(i)) {
-                newSeatIndex = i;
-                break;
-            }
+        if (isGroupAssignment) {
+            const groupName = guestIdOrGroupId.replace('group_', '');
+            guestsToAssign = unassignedGuests.filter(g => g.group === groupName || (!g.group && groupName === 'Sin Sobre'));
+        } else {
+            const guest = guests.find(g => g.id === guestIdOrGroupId);
+            if (guest) guestsToAssign = [guest];
         }
 
-        await updateDoc(doc(db, 'weddings', weddingId, 'guests', guestId), {
-            tableId,
-            seatIndex: newSeatIndex
-        });
+        if (guestsToAssign.length === 0) return;
+
+        const seatedGuests = guests.filter(g => g.tableId === tableId);
+        const availableSeats = table.seats - seatedGuests.length;
+
+        if (guestsToAssign.length > availableSeats) {
+            alert(`No hay suficientes sillas. Faltan ${guestsToAssign.length - availableSeats} asientos en esta mesa.`);
+            return;
+        }
+
+        const occupiedSeats = seatedGuests.map(g => g.seatIndex).filter(i => i !== undefined);
+        let nextSeatIndices = [];
+        let currentSeatTry = 0;
+
+        while (nextSeatIndices.length < guestsToAssign.length && currentSeatTry < table.seats) {
+            if (!occupiedSeats.includes(currentSeatTry)) {
+                nextSeatIndices.push(currentSeatTry);
+            }
+            currentSeatTry++;
+        }
+
+        try {
+            const promises = guestsToAssign.map((g, index) =>
+                updateDoc(doc(db, 'weddings', weddingId, 'guests', g.id), {
+                    tableId,
+                    seatIndex: nextSeatIndices[index]
+                })
+            );
+            await Promise.all(promises);
+        } catch (error) {
+            console.error("Error asignando invitados:", error);
+        }
+
         setDraggingGuest(null);
     };
 
     const unassignGuest = async (guestId) => {
-        await updateDoc(doc(db, 'weddings', weddingId, 'guests', guestId), {
-            tableId: null,
-            seatIndex: null
-        });
+        if (guestId.startsWith('group_')) {
+            const groupName = guestId.replace('group_', '');
+            const groupGuests = guests.filter(g => g.group === groupName || (!g.group && groupName === 'Sin Sobre'));
+            await Promise.all(groupGuests.map(g => updateDoc(doc(db, 'weddings', weddingId, 'guests', g.id), {
+                tableId: null,
+                seatIndex: null
+            })));
+        } else {
+            await updateDoc(doc(db, 'weddings', weddingId, 'guests', guestId), {
+                tableId: null,
+                seatIndex: null
+            });
+        }
     };
 
     // --- CANVAS INTERACTION ---
@@ -173,8 +218,8 @@ export default function MesasPage() {
 
     const handleTableInteraction = (e, type, tableId) => {
         if (type === 'drop') {
-            const guestId = e.dataTransfer.getData("guestId");
-            if (guestId) assignGuest(guestId, tableId);
+            const currentGuestId = e.dataTransfer.getData("guestId");
+            if (currentGuestId) assignGuest(currentGuestId, tableId, true);
             return;
         }
 
@@ -214,13 +259,22 @@ export default function MesasPage() {
     // --- RENDER HELPERS ---
 
     const selectedTable = tables.find(t => t.id === selectedTableId);
-    const selectedGuest = guests.find(g => g.id === selectedGuestId);
+    let selectedGuestForBanner = null;
+    if (selectedGuestId) {
+        if (selectedGuestId.startsWith('group_')) {
+            const groupName = selectedGuestId.replace('group_', '');
+            const count = unassignedGuests.filter(g => g.group === groupName || (!g.group && groupName === 'Sin Sobre')).length;
+            selectedGuestForBanner = { nombre: `${groupName === 'undefined' ? 'Sin Grupo' : groupName} (${count} personas)` };
+        } else {
+            selectedGuestForBanner = guests.find(g => g.id === selectedGuestId);
+        }
+    }
 
     if (authLoading) return <DashboardSkeleton />;
 
     return (
         <div
-            className="h-[calc(100vh-100px)] flex flex-col md:flex-row gap-6 overflow-hidden animate-fade-in relative"
+            className="h-[calc(100dvh-160px)] md:h-[calc(100vh-160px)] flex flex-col md:flex-row gap-6 overflow-hidden animate-fade-in relative"
         >
 
             {/* 1. LEFT SIDEBAR: GUESTS (Desktop always visible, Mobile tab) */}
@@ -291,16 +345,33 @@ export default function MesasPage() {
                                     <span className="text-[10px] bg-white text-gray-400 px-1.5 py-0.5 rounded border border-gray-200">{groupGuests.length}</span>
                                 </div>
                                 <div className="p-2 space-y-1">
-                                    {groupGuests.map(guest => (
-                                        <GuestCard
-                                            key={guest.id}
-                                            guest={guest}
-                                            selectedGuestId={selectedGuestId}
-                                            setSelectedGuestId={setSelectedGuestId}
-                                            setActiveTab={setActiveTab}
-                                            setDraggingGuest={setDraggingGuest}
-                                        />
-                                    ))}
+                                    {groupingMode === 'group' ? (
+                                        // In envelopes/group mode, render ONLY ONE card per group
+                                        groupGuests.length > 0 && (
+                                            <GuestCard
+                                                key={`group_${groupName}`}
+                                                guest={groupGuests[0]} // Use the first guest as reference for the group name
+                                                isGroup={true}
+                                                groupGuests={groupGuests}
+                                                selectedGuestId={selectedGuestId}
+                                                setSelectedGuestId={setSelectedGuestId}
+                                                setActiveTab={setActiveTab}
+                                                setDraggingGuest={setDraggingGuest}
+                                            />
+                                        )
+                                    ) : (
+                                        // In tags mode, render all guests normally
+                                        groupGuests.map(guest => (
+                                            <GuestCard
+                                                key={guest.id}
+                                                guest={guest}
+                                                selectedGuestId={selectedGuestId}
+                                                setSelectedGuestId={setSelectedGuestId}
+                                                setActiveTab={setActiveTab}
+                                                setDraggingGuest={setDraggingGuest}
+                                            />
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         ))
@@ -321,15 +392,15 @@ export default function MesasPage() {
             `}>
 
                 {/* MOBILE GUEST ASSIGNMENT BANNER */}
-                {selectedGuest && (
-                    <div className="absolute top-4 left-4 right-4 z-40 bg-[#333] text-white p-4 rounded-xl shadow-xl flex justify-between items-center animate-slide-in-down">
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">Asignando a</p>
-                            <p className="font-medium text-lg leading-none">{selectedGuest.nombre}</p>
+                {selectedGuestForBanner && (
+                    <div className="absolute top-4 left-4 right-4 z-40 bg-[#333] text-white p-4 rounded-xl shadow-xl flex justify-between items-center animate-slide-in-down border-[3px] border-boda-text">
+                        <div className="flex-1 min-w-0 pr-4">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-[#C5A065]">Fijando Asiento</p>
+                            <p className="font-medium text-base truncate">{selectedGuestForBanner.nombre}</p>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setSelectedGuestId(null)} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold">Cancelar</button>
-                            <div className="px-3 py-2 bg-white text-[#333] rounded-lg text-xs font-bold animate-pulse">Toca una mesa</div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                            <div className="px-3 py-1 bg-[#C5A065] text-white rounded-md text-[10px] font-bold uppercase animate-pulse shadow-sm">Toca una mesa</div>
+                            <button onClick={() => setSelectedGuestId(null)} className="text-[10px] font-bold uppercase text-gray-400 hover:text-white px-2 py-1">Cancelar</button>
                         </div>
                     </div>
                 )}

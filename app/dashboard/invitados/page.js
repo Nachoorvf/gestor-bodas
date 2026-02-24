@@ -18,9 +18,10 @@ export default function InvitadosPage() {
     // EDIT GUEST STATE
     const [editingGuest, setEditingGuest] = useState(null);
 
-    // UI SEARCH/VIEW
+    // UI SEARCH/VIEW/FILTER
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState('invitations'); // 'invitations' (Sobres), 'guests' (Todos), 'tags' (Etiquetas)
+    const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'pending', 'confirmed', 'declined'
 
     // CREATE MODAL STATE
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -235,6 +236,17 @@ export default function InvitadosPage() {
         }
     };
 
+    // 5. QUICK ACTION: UPDATE STATUS DIRECTLY
+    const handleQuickStatusUpdate = async (guestId, newStatus) => {
+        try {
+            await updateDoc(doc(db, 'weddings', weddingId, 'guests', guestId), {
+                confirmado: newStatus
+            });
+        } catch (error) {
+            console.error("Error updating status:", error);
+        }
+    };
+
     // HELPERS
     const getInvitationLink = (invId) => {
         if (typeof window === 'undefined') return '';
@@ -285,12 +297,40 @@ export default function InvitadosPage() {
     };
 
     // -- RENDER --
-    const filteredInvitations = invitations.filter(inv => inv.name.toLowerCase().includes(searchTerm.toLowerCase()));
-
     // Filtered Guest List for "Guests" Mode
     const filteredGuests = guests
         .filter(g => g.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
+        .filter(g => {
+            if (filterStatus === 'all') return true;
+            if (filterStatus === 'pending') return g.confirmado === null;
+            if (filterStatus === 'confirmed') return g.confirmado === true;
+            if (filterStatus === 'declined') return g.confirmado === false;
+            return true;
+        })
         .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+    const filteredInvitations = invitations.filter(inv => {
+        if (!inv.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+        // Apply status filter to envelopes (show envelope if ANY guest matches)
+        if (filterStatus === 'all') return true;
+        const invGuests = guests.filter(g => g.invitationId === inv.id);
+        if (invGuests.length === 0) return filterStatus !== 'confirmed' && filterStatus !== 'declined'; // show empty only on pending/all
+        return invGuests.some(g => {
+            if (filterStatus === 'pending') return g.confirmado === null;
+            if (filterStatus === 'confirmed') return g.confirmado === true;
+            if (filterStatus === 'declined') return g.confirmado === false;
+            return true;
+        });
+    });
+
+    const getGroupedGuestsFiltered = () => {
+        return filteredGuests.reduce((groups, guest) => {
+            const key = guest.role || 'Sin Etiqueta';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(guest);
+            return groups;
+        }, {});
+    };
 
     // Stats
     const totalGuests = guests.length;
@@ -314,10 +354,32 @@ export default function InvitadosPage() {
 
                 <button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="hidden md:flex bg-[#333] text-white px-8 py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-black transition shadow-lg items-center gap-2"
+                    className="hidden md:flex bg-[#333] text-white px-8 py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-black transition shadow-lg items-center gap-2 shrink-0"
                 >
                     <Plus size={16} /> Crear Invitado
                 </button>
+            </div>
+
+            {/* QUICK FILTERS (MOBILE FIRST) */}
+            <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none px-4 md:px-0 -mx-4 md:mx-0 snap-x">
+                {[
+                    { id: 'all', label: 'Todos', icon: Users, color: 'text-gray-600', bg: 'bg-white border-gray-200' },
+                    { id: 'pending', label: 'Pendientes', icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50 border-orange-100/50' },
+                    { id: 'confirmed', label: 'Vienen', icon: Check, color: 'text-green-600', bg: 'bg-green-50 border-green-100/50' },
+                    { id: 'declined', label: 'No Vienen', icon: X, color: 'text-red-500', bg: 'bg-red-50 border-red-100/50' }
+                ].map(f => {
+                    const isActive = filterStatus === f.id;
+                    const Icon = f.icon;
+                    return (
+                        <button
+                            key={f.id}
+                            onClick={() => setFilterStatus(f.id)}
+                            className={`snap-start shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-full border text-sm font-bold transition-all shadow-sm ${isActive ? 'bg-[#333] text-white border-[#333]' : f.bg} ${isActive ? '' : 'text-gray-500'}`}
+                        >
+                            <Icon size={14} className={isActive ? 'text-white' : undefined} /> {f.label}
+                        </button>
+                    )
+                })}
             </div>
 
             {/* MOBILE FAB (Floating Action Button) */}
@@ -414,26 +476,47 @@ export default function InvitadosPage() {
                             </>
                         )}
 
-                        {/* MODE: GUESTS (FLATTENED) */}
+                        {/* MODE: GUESTS (FLATTENED WITH QUICK ACTIONS) */}
                         {viewMode === 'guests' && (
                             <>
                                 {filteredGuests.length === 0 && <p className="text-center text-sm text-gray-400 py-20">No se encontraron invitados</p>}
                                 {filteredGuests.map(guest => (
                                     <div
                                         key={guest.id}
-                                        onClick={() => handleSelectGuestFromList(guest)}
-                                        className={`p-4 md:p-3 rounded-xl cursor-pointer transition border border-transparent flex items-center justify-between ${selectedInvitationId === guest.invitationId ? 'bg-gray-50 border-gray-200 shadow-inner' : 'hover:bg-gray-50'}`}
+                                        className={`p-3 md:p-4 rounded-2xl transition border border-gray-100 shadow-sm mb-2 flex flex-col md:flex-row md:items-center justify-between gap-3 ${selectedInvitationId === guest.invitationId ? 'bg-gray-50 border-gray-300' : 'bg-white'}`}
                                     >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs font-bold ${guest.confirmado ? 'bg-green-100 text-green-700' : (guest.confirmado === false ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-400')}`}>
-                                                {guest.confirmado ? <Check size={16} /> : (guest.confirmado === false ? <X size={16} /> : <Clock size={16} />)}
+                                        <div
+                                            className="flex items-center gap-3 cursor-pointer flex-1"
+                                            onClick={() => handleSelectGuestFromList(guest)}
+                                        >
+                                            <div className={`shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center text-sm font-bold shadow-inner ${guest.confirmado ? 'bg-green-100 text-green-700' : (guest.confirmado === false ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-400')}`}>
+                                                {guest.confirmado ? <Check size={18} /> : (guest.confirmado === false ? <X size={18} /> : <Clock size={18} />)}
                                             </div>
-                                            <div>
-                                                <p className="font-bold text-[#333] text-base md:text-sm">{guest.nombre}</p>
-                                                <p className="text-xs md:text-[10px] text-gray-400">{guest.group || 'Sin Sobre'}</p>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-bold text-[#333] text-base truncate">{guest.nombre}</p>
+                                                    {guest.role && <span className="hidden md:inline-flex text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium">{guest.role}</span>}
+                                                </div>
+                                                <p className="text-[11px] md:text-xs text-gray-400 truncate">{guest.group || 'Sin Sobre'}</p>
+                                                {guest.role && <span className="md:hidden inline-block mt-1 text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium">{guest.role}</span>}
                                             </div>
                                         </div>
-                                        {guest.role && <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{guest.role}</span>}
+
+                                        {/* QUICK ACTIONS MOBILE FIRST */}
+                                        <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-1 shrink-0 w-full md:w-auto mt-2 md:mt-0 justify-between md:justify-end">
+                                            <button
+                                                onClick={() => handleQuickStatusUpdate(guest.id, null)}
+                                                className={`flex-1 md:flex-none flex justify-center p-2 md:px-3 text-xs font-bold rounded-lg transition ${guest.confirmado === null ? 'bg-white shadow-sm text-gray-600 border border-gray-200' : 'text-gray-400 hover:text-gray-600'}`}
+                                            ><Clock size={16} /></button>
+                                            <button
+                                                onClick={() => handleQuickStatusUpdate(guest.id, true)}
+                                                className={`flex-1 md:flex-none flex justify-center p-2 md:px-3 text-xs font-bold rounded-lg transition ${guest.confirmado === true ? 'bg-white shadow-sm text-green-600 border border-green-200' : 'text-green-300 hover:text-green-500'}`}
+                                            ><Check size={16} /></button>
+                                            <button
+                                                onClick={() => handleQuickStatusUpdate(guest.id, false)}
+                                                className={`flex-1 md:flex-none flex justify-center p-2 md:px-3 text-xs font-bold rounded-lg transition ${guest.confirmado === false ? 'bg-white shadow-sm text-red-500 border border-red-200' : 'text-red-200 hover:text-red-400'}`}
+                                            ><X size={16} /></button>
+                                        </div>
                                     </div>
                                 ))}
                             </>
@@ -442,7 +525,7 @@ export default function InvitadosPage() {
                         {/* MODE: TAGS (GROUPED) */}
                         {viewMode === 'tags' && (
                             <>
-                                {Object.entries(getGroupedGuests()).map(([groupName, groupGuests]) => (
+                                {Object.entries(getGroupedGuestsFiltered()).map(([groupName, groupGuests]) => (
                                     <div key={groupName} className="mb-4 bg-gray-50/50 rounded-xl overflow-hidden border border-gray-100">
                                         <div className="px-3 py-2 bg-gray-100 border-b border-gray-100 flex justify-between items-center">
                                             <span className="font-bold text-xs text-gray-600 uppercase tracking-wide">{groupName}</span>
@@ -462,7 +545,7 @@ export default function InvitadosPage() {
                                         </div>
                                     </div>
                                 ))}
-                                {Object.keys(getGroupedGuests()).length === 0 && <p className="text-center text-sm text-gray-400 py-20">No hay grupos</p>}
+                                {Object.keys(getGroupedGuestsFiltered()).length === 0 && <p className="text-center text-sm text-gray-400 py-20">No hay grupos</p>}
                             </>
                         )}
 
