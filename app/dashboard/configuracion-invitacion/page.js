@@ -128,7 +128,7 @@ export default function InvitationConfigPage() {
 
     // --- HELPER: UNIFIED LIST OF ITEMS ---
     const getAllItems = () => {
-        const fixed = ['location', 'timeline', 'bank', 'rsvp'].map(key => ({
+        const fixed = ['location', 'timeline', 'bank', 'rsvp'].filter(key => key === 'rsvp' || config[key]?.enabled).map(key => ({
             id: key,
             type: 'fixed',
             order: config[key]?.order || 99,
@@ -499,7 +499,10 @@ export default function InvitationConfigPage() {
                     {/* BLOCK TOOLBAR */}
                     <div className="space-y-4">
                         <p className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Añadir Contenido</p>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2 md:gap-3">
+                        <div className="flex flex-wrap gap-2 md:gap-3">
+                            {!config.timeline?.enabled && <ToolbarBtn icon={<Calendar size={16} />} label="Agenda" onClick={() => toggleModule('timeline')} color="text-[#C5A065] bg-[#C5A065]/10 hover:bg-[#C5A065]/20" />}
+                            {!config.location?.enabled && <ToolbarBtn icon={<MapPin size={16} />} label="Ubicación" onClick={() => toggleModule('location')} color="text-[#C5A065] bg-[#C5A065]/10 hover:bg-[#C5A065]/20" />}
+                            {!config.bank?.enabled && <ToolbarBtn icon={<Gift size={16} />} label="Regalo" onClick={() => toggleModule('bank')} color="text-[#C5A065] bg-[#C5A065]/10 hover:bg-[#C5A065]/20" />}
                             <ToolbarBtn icon={<AlignLeft size={16} />} label="Texto" onClick={() => addBlock('text')} />
                             <ToolbarBtn icon={<ImageIcon size={16} />} label="Imagen" onClick={() => addBlock('image')} />
                             <ToolbarBtn icon={<Video size={16} />} label="Video" onClick={() => addBlock('video')} />
@@ -550,15 +553,13 @@ export default function InvitationConfigPage() {
                                                     <button onClick={() => moveItem(item.id, 'down')} disabled={isLast} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-[#333] disabled:opacity-20"><ChevronDown size={14} /></button>
                                                 </div>
 
-                                                {/* Delete for Custom, Switch for Fixed */}
-                                                {item.isCustom ? (
-                                                    <button onClick={() => removeCustomBlock(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full text-red-300 hover:text-red-500 hover:bg-red-50 transition ml-2">
+                                                {/* Delete for Custom/Fixed, Switch for RSVP */}
+                                                {(item.isCustom || item.id !== 'rsvp') ? (
+                                                    <button onClick={() => item.isCustom ? removeCustomBlock(item.id) : toggleModule(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full text-red-300 hover:text-red-500 hover:bg-red-50 transition ml-2">
                                                         <Trash2 size={16} />
                                                     </button>
-                                                ) : item.id === 'rsvp' ? (
-                                                    <div className="px-2 py-1 bg-gray-100 rounded text-[10px] font-bold uppercase tracking-widest text-[#333] ml-2 select-none border border-gray-200">Obligatorio</div>
                                                 ) : (
-                                                    <div className="ml-2"><Switch checked={item.enabled} onChange={() => toggleModule(item.id)} /></div>
+                                                    <div className="px-2 py-1 bg-gray-100 rounded text-[10px] font-bold uppercase tracking-widest text-[#333] ml-2 select-none border border-gray-200">Obligatorio</div>
                                                 )}
                                             </div>
                                         </div>

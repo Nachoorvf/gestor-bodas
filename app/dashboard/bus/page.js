@@ -92,7 +92,7 @@ export default function BusPage() {
     return (
         <div className="max-w-6xl mx-auto flex flex-col pb-20 animate-fade-in">
             {/* HEADER */}
-            <div className="flex justify-between items-end mb-12">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8 md:mb-12">
                 <div>
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Logística</span>
                     <h1 className="text-4xl md:text-5xl font-serif text-boda-text leading-tight">
@@ -146,9 +146,9 @@ export default function BusPage() {
                         {/* CONFIG CONFIGURATION */}
                         {activeTab === 'config' && (
                             <div className="space-y-12">
-                                <div className="grid lg:grid-cols-2 gap-8">
+                                <div className="grid lg:grid-cols-2 gap-6 md:gap-8">
                                     {busConfig.routes.map((route, index) => (
-                                        <div key={route.id} className="group relative bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm transition-all hover:shadow-xl hover:border-gray-200">
+                                        <div key={route.id} className="group relative bg-white p-5 md:p-8 rounded-3xl border border-gray-100 shadow-sm transition-all hover:shadow-xl hover:border-gray-200">
                                             {/* Header */}
                                             <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-50">
                                                 <div className="flex items-center gap-3">
@@ -193,7 +193,7 @@ export default function BusPage() {
                                 </div>
 
                                 {/* NOTES SECTION */}
-                                <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm">
+                                <div className="bg-white p-5 md:p-8 rounded-3xl border border-gray-100 shadow-sm">
                                     <h3 className="font-serif text-xl text-boda-text mb-2">Notas Adicionales</h3>
                                     <p className="text-xs text-gray-400 mb-4 uppercase tracking-widest">Información visible para los invitados</p>
                                     <textarea
@@ -238,38 +238,63 @@ export default function BusPage() {
                                             </p>
                                         </div>
                                     ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left">
-                                                <thead className="bg-gray-50/50 border-b border-gray-100">
-                                                    <tr>
-                                                        <th className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nombre</th>
-                                                        <th className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Mesa</th>
-                                                        <th className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Confirmado</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-50">
-                                                    {passengers.map((guest) => (
-                                                        <tr key={guest.id} className="hover:bg-gray-50/30 transition-colors cursor-default group">
-                                                            <td className="px-8 py-4">
-                                                                <span className="font-bold text-boda-text block">{guest.nombre}</span>
-                                                                <span className="text-xs text-gray-400">{guest.role || 'Invitado'}</span>
-                                                            </td>
-                                                            <td className="px-8 py-4">
-                                                                {guest.tableId ? (
-                                                                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded inline-block">Con Mesa</span>
-                                                                ) : (
-                                                                    <span className="text-xs text-gray-300 italic">—</span>
-                                                                )}
-                                                            </td>
-                                                            <td className="px-8 py-4 text-right">
-                                                                <div className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide">
-                                                                    <Check size={10} /> Sí
-                                                                </div>
-                                                            </td>
+                                        <div>
+                                            {/* DESKTOP VIEW: TABLE */}
+                                            <div className="hidden md:block overflow-x-auto">
+                                                <table className="w-full text-left">
+                                                    <thead className="bg-gray-50/50 border-b border-gray-100">
+                                                        <tr>
+                                                            <th className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nombre</th>
+                                                            <th className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Mesa</th>
+                                                            <th className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Confirmado</th>
                                                         </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-50">
+                                                        {passengers.map((guest) => (
+                                                            <tr key={guest.id} className="hover:bg-gray-50/30 transition-colors cursor-default group">
+                                                                <td className="px-8 py-4">
+                                                                    <span className="font-bold text-boda-text block">{guest.nombre}</span>
+                                                                    <span className="text-xs text-gray-400">{guest.role || 'Invitado'}</span>
+                                                                </td>
+                                                                <td className="px-8 py-4">
+                                                                    {guest.tableId ? (
+                                                                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded inline-block">Con Mesa</span>
+                                                                    ) : (
+                                                                        <span className="text-xs text-gray-300 italic">—</span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-8 py-4 text-right">
+                                                                    <div className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide">
+                                                                        <Check size={10} /> Sí
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                            {/* MOBILE VIEW: CARDS */}
+                                            <div className="block md:hidden divide-y divide-gray-50">
+                                                {passengers.map((guest) => (
+                                                    <div key={guest.id} className="p-4 flex flex-col gap-2">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <span className="font-bold text-[#333] block">{guest.nombre}</span>
+                                                                <span className="text-xs text-gray-400">{guest.role || 'Invitado'}</span>
+                                                            </div>
+                                                            <div className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">
+                                                                <Check size={10} /> Sí
+                                                            </div>
+                                                        </div>
+                                                        {guest.tableId && (
+                                                            <div>
+                                                                <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">En Mesa</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                 </div>

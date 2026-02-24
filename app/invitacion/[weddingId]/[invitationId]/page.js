@@ -16,8 +16,9 @@ export default function InvitationPublicPage() {
     const [error, setError] = useState('');
 
     // MODAL STATES
-    const [activeModal, setActiveModal] = useState(null); // 'rsvp' | 'timeline' | 'gift'
+    const [activeModal, setActiveModal] = useState(null); // 'rsvp' | 'timeline'
     const [notification, setNotification] = useState(null); // { message, type: 'success'|'error' }
+    const [isGiftExpanded, setIsGiftExpanded] = useState(false);
 
     // INDEPENDENT BLOCKS STATE
     const [songInputs, setSongInputs] = useState({});
@@ -231,13 +232,38 @@ export default function InvitationPublicPage() {
                     }
                     if (item.id === 'bank') {
                         return (
-                            <button key={item.id} onClick={() => setActiveModal('gift')} className="w-full flex items-center gap-4 bg-white/60 backdrop-blur px-6 py-5 rounded-2xl border border-white/50 shadow-sm hover:bg-white transition group">
-                                <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Gift size={20} /></div>
-                                <div className="text-left">
-                                    <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Regalo'}</p>
-                                    <p className="font-serif text-[#333] text-lg">Lista de Boda</p>
+                            <div key={item.id} className="w-full flex items-center justify-center -mt-2 mb-4 animate-fade-in-up">
+                                <div className="w-full max-w-sm flex flex-col overflow-hidden transition-all duration-300">
+                                    <button
+                                        onClick={() => setIsGiftExpanded(!isGiftExpanded)}
+                                        className="w-full flex items-center justify-center gap-2 py-4 opacity-70 hover:opacity-100 transition-opacity"
+                                    >
+                                        <Gift size={14} className="text-[#333]" />
+                                        <p className="font-serif text-[#333] text-sm italic">{item.title || 'Un detalle para nosotros'}</p>
+                                    </button>
+
+                                    <div className={`transition-all duration-500 ease-in-out ${isGiftExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+                                        <div className="px-6 pb-6 pt-2 space-y-5">
+                                            <p className="font-serif text-sm text-[#333] leading-relaxed text-center italic opacity-80">
+                                                "{item.message || 'Vuestra presencia es nuestro mayor regalo.'}"
+                                            </p>
+                                            {item.iban && (
+                                                <div
+                                                    className="bg-white/40 backdrop-blur-sm p-4 rounded-xl border border-white/40 flex flex-col items-center gap-2 group/iban cursor-pointer hover:bg-white/60 transition shadow-sm mx-auto w-full max-w-[280px]"
+                                                    onClick={() => copyToClipboard(item.iban)}
+                                                >
+                                                    <p className="text-[10px] uppercase tracking-widest text-[#333] font-bold opacity-60">Número de Cuenta</p>
+                                                    <div className="flex items-center gap-3">
+                                                        <p className="font-mono text-sm text-[#333] font-medium tracking-wider">{item.iban}</p>
+                                                        {copiedIban ? <Check size={16} className="text-green-600" /> : <Copy size={16} className="text-[#333] opacity-40 group-hover/iban:opacity-80 transition-opacity" />}
+                                                    </div>
+                                                    <p className="text-[10px] text-[#333] mt-1 opacity-50">{copiedIban ? '¡Copiado al portapapeles!' : 'Pincha para copiar'}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                            </button>
+                            </div>
                         );
                     }
 
@@ -458,7 +484,6 @@ export default function InvitationPublicPage() {
                             <div>
                                 {activeModal === 'rsvp' && <h3 className="font-serif text-2xl text-[#333]">Vuestra Asistencia</h3>}
                                 {activeModal === 'timeline' && <h3 className="font-serif text-2xl text-[#333]">{weddingData?.invitationConfig?.timeline?.title || 'Agenda del Día'}</h3>}
-                                {activeModal === 'gift' && <h3 className="font-serif text-2xl text-[#333]">{weddingData?.invitationConfig?.bank?.title || 'Lista de Boda'}</h3>}
                             </div>
                             <button onClick={() => setActiveModal(null)} className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 flex items-center justify-center transition">✕</button>
                         </div>
@@ -520,27 +545,6 @@ export default function InvitationPublicPage() {
                                 </div>
                             )}
 
-                            {/* GIFT CONTENT */}
-                            {activeModal === 'gift' && (
-                                <div className="text-center space-y-6 py-6">
-                                    <div className="w-16 h-16 bg-[#333] text-white rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <Gift size={32} />
-                                    </div>
-                                    <p className="font-serif text-lg text-gray-600 leading-relaxed italic px-4">
-                                        "{weddingData?.invitationConfig?.bank?.message || 'Vuestra presencia es nuestro mayor regalo.'}"
-                                    </p>
-                                    {weddingData?.invitationConfig?.bank?.iban && (
-                                        <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col items-center gap-2 group cursor-pointer hover:bg-gray-100 transition" onClick={() => copyToClipboard(weddingData.invitationConfig.bank.iban)}>
-                                            <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Número de Cuenta</p>
-                                            <div className="flex items-center gap-3">
-                                                <p className="font-mono text-xl md:text-2xl text-[#333] tracking-widest">{weddingData.invitationConfig.bank.iban}</p>
-                                                {copiedIban ? <Check size={16} className="text-green-500" /> : <Copy size={16} className="text-gray-400 group-hover:text-[#333]" />}
-                                            </div>
-                                            <p className="text-[10px] text-gray-400 mt-2">{copiedIban ? '¡Copiado!' : 'Click para copiar'}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
