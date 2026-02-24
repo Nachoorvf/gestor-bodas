@@ -22,6 +22,7 @@ export default function InvitationConfigPage() {
     const [previewUrl, setPreviewUrl] = useState(null);
     const [newGalleryUrl, setNewGalleryUrl] = useState({}); // { blockId: 'url' }
     const [showMobilePreview, setShowMobilePreview] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
 
     // CONFIG STATE
     const [config, setConfig] = useState({
@@ -93,6 +94,33 @@ export default function InvitationConfigPage() {
             iframe.contentWindow.postMessage({ type: 'UPDATE_CONFIG', config }, '*');
         }
     }, [config, previewUrl]);
+
+    const handleImageUpload = async (file, pathPrefix) => {
+        if (!file) return null;
+        if (!file.type.startsWith('image/')) {
+            alert('Por favor, selecciona una imagen válida.');
+            return null;
+        }
+
+        setUploadingImage(true);
+        try {
+            const fileExtension = file.name.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExtension}`;
+            // Guarda en una ruta específica dentro de la boda actual
+            const storagePath = `weddings/${weddingId}/${pathPrefix}/${fileName}`;
+            const storageRef = ref(storage, storagePath);
+
+            await uploadBytes(storageRef, file);
+            const url = await getDownloadURL(storageRef);
+            return url;
+        } catch (error) {
+            console.error('Error al subir la imagen:', error);
+            alert('Error al subir la imagen. Comprueba que el archivo no sea demasiado pesado.');
+            return null;
+        } finally {
+            setUploadingImage(false);
+        }
+    };
 
     // --- HELPER: UNIFIED LIST OF ITEMS ---
     const getAllItems = () => {
@@ -371,16 +399,34 @@ export default function InvitationConfigPage() {
                             </div>
 
                             {/* Background Image Input */}
-                            <TextInput
-                                label="Imagen de Fondo (URL)"
-                                value={config.design?.backgroundImage}
-                                onChange={(e) => updateModule('design', 'backgroundImage', e.target.value)}
-                                placeholder="https://..."
-                                icon={<ImageIcon size={14} />}
-                            />
-                            <div className="text-[10px] text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 mt-2">
-                                <p className="font-bold text-[#333] mb-1">ℹ️ Instrucciones:</p>
-                                <p>Para poner una imagen de fondo, necesitas un <strong>enlace directo (URL)</strong>. Puedes subir tu foto a un servicio como <a href="https://imgbb.com" target="_blank" className="text-blue-500 underline">ImgBB</a>, Dropbox (carpeta pública) o usar una imagen de tu web/redes sociales.</p>
+                            <div className="space-y-3">
+                                <TextInput
+                                    label="Imagen de Fondo (URL)"
+                                    value={config.design?.backgroundImage}
+                                    onChange={(e) => updateModule('design', 'backgroundImage', e.target.value)}
+                                    placeholder="https://..."
+                                    icon={<ImageIcon size={14} />}
+                                />
+                                <div className="text-[10px] text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 mt-2">
+                                    <p className="font-bold text-[#333] mb-1">ℹ️ O sube una foto directamente:</p>
+                                    <label className={`mt-2 flex items-center justify-center px-4 py-2 bg-white border border-gray-200 hover:border-[#333] hover:bg-gray-50 text-xs font-bold uppercase tracking-wider text-[#333] rounded-lg cursor-pointer transition w-full shadow-sm ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                        <ImageIcon size={14} className="mr-2" />
+                                        {uploadingImage ? 'Subiendo...' : 'Seleccionar desde mi dispositivo'}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            disabled={uploadingImage}
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    const url = await handleImageUpload(file, 'backgrounds');
+                                                    if (url) updateModule('design', 'backgroundImage', url);
+                                                }
+                                            }}
+                                        />
+                                    </label>
+                                </div>
                             </div>
 
                             {/* Typography Selector */}
@@ -559,15 +605,29 @@ export default function InvitationConfigPage() {
                                                             placeholder="https://..."
                                                         />
                                                         <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 border-dashed">
-                                                            <div className="w-24 h-24 bg-white rounded-lg overflow-hidden shrink-0 border border-gray-200 flex items-center justify-center">
+                                                            <div className="w-24 h-24 bg-white rounded-lg overflow-hidden shrink-0 border border-gray-200 flex items-center justify-center relative group">
                                                                 {item.content ? <img src={item.content} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={24} />}
                                                             </div>
-                                                            <div className="text-xs text-gray-500 space-y-2 flex-1">
-                                                                <p className="font-bold text-[#333]">Instrucciones:</p>
-                                                                <ul className="list-disc pl-4 space-y-1">
-                                                                    <li>Usa imágenes alojadas en Drive, Dropbox o tu propia web.</li>
-                                                                    <li>Asegúrate de que el enlace sea público y directo a la imagen.</li>
-                                                                </ul>
+                                                            <div className="text-xs text-gray-500 space-y-3 flex-1">
+                                                                <p className="font-bold text-[#333]">O sube tu imagen desde aquí:</p>
+                                                                <label className={`flex items-center justify-center px-4 py-2 bg-white border border-gray-200 hover:border-[#333] hover:bg-gray-50 text-xs font-bold uppercase tracking-wider text-[#333] rounded-lg cursor-pointer transition w-full shadow-sm ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                                                    <ImageIcon size={14} className="mr-2" />
+                                                                    {uploadingImage ? 'Subiendo...' : 'Subir imagen'}
+                                                                    <input
+                                                                        type="file"
+                                                                        accept="image/*"
+                                                                        className="hidden"
+                                                                        disabled={uploadingImage}
+                                                                        onChange={async (e) => {
+                                                                            const file = e.target.files?.[0];
+                                                                            if (file) {
+                                                                                const url = await handleImageUpload(file, `blocks/${item.id}`);
+                                                                                if (url) updateCustomBlock(item.id, 'content', url);
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </label>
+                                                                <p className="text-[10px]">Puedes pegar una URL en la caja de arriba o subir un archivo directamente.</p>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -615,13 +675,13 @@ export default function InvitationConfigPage() {
                                                             ))}
 
                                                             {/* Add Image Input */}
-                                                            <div className="w-full mt-2">
+                                                            <div className="w-full mt-2 space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                                                                 <div className="flex gap-2">
                                                                     <div className="flex-1 relative">
                                                                         <input
                                                                             type="text"
-                                                                            placeholder="Enlace de la foto..."
-                                                                            className="w-full pl-3 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-pink-300 focus:bg-white transition"
+                                                                            placeholder="Pegar enlace de la foto..."
+                                                                            className="w-full pl-3 pr-3 py-2.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-pink-300 transition"
                                                                             value={newGalleryUrl[item.id] || ''}
                                                                             onChange={(e) => setNewGalleryUrl({ ...newGalleryUrl, [item.id]: e.target.value })}
                                                                         />
@@ -635,11 +695,37 @@ export default function InvitationConfigPage() {
                                                                             setNewGalleryUrl({ ...newGalleryUrl, [item.id]: '' });
                                                                         }}
                                                                         disabled={!newGalleryUrl[item.id]}
-                                                                        className="px-4 bg-[#333] text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                                                        className="px-4 bg-[#333] text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1 shadow-sm"
                                                                     >
-                                                                        <Plus size={14} /> Añadir
+                                                                        <Plus size={14} /> Añadir URL
                                                                     </button>
                                                                 </div>
+
+                                                                <div className="relative">
+                                                                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+                                                                    <div className="relative flex justify-center text-[10px] font-bold text-gray-400 uppercase tracking-widest"><span className="bg-gray-50 px-2">O sube archivo</span></div>
+                                                                </div>
+
+                                                                <label className={`flex items-center justify-center px-4 py-2.5 bg-white border border-gray-200 hover:border-pink-300 hover:text-pink-600 hover:bg-pink-50 text-xs font-bold uppercase tracking-wider text-[#333] rounded-lg cursor-pointer transition w-full shadow-sm ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                                                    <ImageIcon size={14} className="mr-2" />
+                                                                    {uploadingImage ? 'Subiendo...' : 'Subir foto a la galería'}
+                                                                    <input
+                                                                        type="file"
+                                                                        accept="image/*"
+                                                                        className="hidden"
+                                                                        disabled={uploadingImage}
+                                                                        onChange={async (e) => {
+                                                                            const file = e.target.files?.[0];
+                                                                            if (file) {
+                                                                                const url = await handleImageUpload(file, `gallery/${item.id}`);
+                                                                                if (url) {
+                                                                                    const current = Array.isArray(item.content) ? item.content : [];
+                                                                                    updateCustomBlock(item.id, 'content', [...current, url]);
+                                                                                }
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </label>
                                                             </div>
                                                         </div>
                                                     </div>
