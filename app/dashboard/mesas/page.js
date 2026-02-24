@@ -70,6 +70,12 @@ export default function MesasPage() {
     const [weddingConfig, setWeddingConfig] = useState(null); // To store partner names and their seats
 
     // UI STATES
+    const [toastMessage, setToastMessage] = useState(null);
+    const showToast = (msg) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(null), 3000);
+    };
+
     const [activeTab, setActiveTab] = useState('map'); // 'guests', 'map', 'inspector'
     const [zoom, setZoom] = useState(0.8);
     const [pan, setPan] = useState({ x: 0, y: 0 }); // NEW: Canvas Panning
@@ -224,7 +230,7 @@ export default function MesasPage() {
         const availableSeats = table.seats - seatedGuests.length;
 
         if (guestsToAssign.length > availableSeats) {
-            alert(`No hay suficientes sillas. Faltan ${guestsToAssign.length - availableSeats} asientos en esta mesa.`);
+            showToast(`No hay suficientes sillas. Faltan ${guestsToAssign.length - availableSeats} asientos en esta mesa.`);
             return;
         }
 
@@ -296,6 +302,70 @@ export default function MesasPage() {
                 });
             }
         }
+    };
+
+    const handleRandomizeSeats = async (tableId) => {
+        const tableGuests = getGuestsForTable(tableId);
+        if (tableGuests.length < 2) return;
+        const table = tables.find(t => t.id === tableId);
+
+        let occupiedIndices = tableGuests.map(g => g.seatIndex).filter(i => i !== null && i !== undefined);
+        let currentSeatTry = 0;
+        // Ensure everyone has some index logic internally assigned
+        while (occupiedIndices.length < tableGuests.length && currentSeatTry < table.seats) {
+            if (!occupiedIndices.includes(currentSeatTry)) occupiedIndices.push(currentSeatTry);
+            currentSeatTry++;
+        }
+
+        const shuffledIndices = [...occupiedIndices].sort(() => Math.random() - 0.5);
+
+        const updates = tableGuests.map((g, index) => {
+            const newIndex = shuffledIndices[index];
+            if (g.id === 'novio_1' || g.id === 'novio_2') {
+                const pPrefix = g.id === 'novio_1' ? 'novio1' : 'novio2';
+                return updateDoc(doc(db, 'weddings', weddingId), { [`${pPrefix}_seatIndex`]: newIndex });
+            } else {
+                return updateDoc(doc(db, 'weddings', weddingId, 'guests', g.id), { seatIndex: newIndex });
+            }
+        });
+        await Promise.all(updates);
+    };
+
+    const handleSwapSeat = async (tableId, occupant, direction) => {
+        const table = tables.find(t => t.id === tableId);
+        const currentIndex = occupant.seatIndex;
+        if (currentIndex === undefined || currentIndex === null) return;
+
+        // direction: 1 (down/next), -1 (up/prev)
+        let targetIndex = currentIndex + direction;
+
+        // Wrap around logic
+        if (targetIndex >= table.seats) targetIndex = 0;
+        if (targetIndex < 0) targetIndex = table.seats - 1;
+
+        const tableGuests = getGuestsForTable(tableId);
+        const targetOccupant = tableGuests.find(g => g.seatIndex === targetIndex);
+
+        const updates = [];
+
+        // Move current occupant to target
+        if (occupant.id === 'novio_1' || occupant.id === 'novio_2') {
+            const pPrefix = occupant.id === 'novio_1' ? 'novio1' : 'novio2';
+            updates.push(updateDoc(doc(db, 'weddings', weddingId), { [`${pPrefix}_seatIndex`]: targetIndex }));
+        } else {
+            updates.push(updateDoc(doc(db, 'weddings', weddingId, 'guests', occupant.id), { seatIndex: targetIndex }));
+        }
+
+        // If target was occupied, move target occupant to current index
+        if (targetOccupant) {
+            if (targetOccupant.id === 'novio_1' || targetOccupant.id === 'novio_2') {
+                const pPrefix = targetOccupant.id === 'novio_1' ? 'novio1' : 'novio2';
+                updates.push(updateDoc(doc(db, 'weddings', weddingId), { [`${pPrefix}_seatIndex`]: currentIndex }));
+            } else {
+                updates.push(updateDoc(doc(db, 'weddings', weddingId, 'guests', targetOccupant.id), { seatIndex: currentIndex }));
+            }
+        }
+        await Promise.all(updates);
     };
 
     // --- CANVAS INTERACTION ---
@@ -509,6 +579,14 @@ export default function MesasPage() {
                 ${activeTab === 'map' ? 'flex' : 'hidden md:flex'}
                 flex-1 flex-col bg-gray-100/50 rounded-3xl border border-gray-200 overflow-hidden relative shadow-inner
             `}>
+
+                    {/* CUSTOM TOAST NOTIFICATION */}
+                    {toastMessage && (
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-[#333] text-white px-6 py-3 rounded-full shadow-2xl animate-fade-in font-medium text-sm border border-gray-600 flex items-center gap-2 max-w-[90%] w-max text-center">
+                            <span>⚠️</span>
+                            {toastMessage}
+                        </div>
+                    )}
 
                     {/* MOBILE GUEST ASSIGNMENT BANNER */}
                     {selectedGuestForBanner && (
@@ -794,55 +872,45 @@ export default function MesasPage() {
                                 <div>
                                     <div className="flex justify-between items-center mb-2">
                                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Invitados en mesa</label>
-                                        <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full font-bold">{getGuestsForTable(selectedTable.id).length} / {selectedTable.seats}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full font-bold">{getGuestsForTable(selectedTable.id).length} / {selectedTable.seats}</span>
+                                            {getGuestsForTable(selectedTable.id).length > 1 && (
+                                                <button
+                                                    onClick={() => handleRandomizeSeats(selectedTable.id)}
+                                                    className="text-[10px] bg-white border border-gray-200 hover:bg-gray-50 px-2 py-1 rounded shadow-sm transition font-bold"
+                                                    title="Aleatorizar Asientos"
+                                                >
+                                                    🔀
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="bg-gray-50 rounded-xl p-2 space-y-1 min-h-[100px]">
-                                        {getGuestsForTable(selectedTable.id).sort((a, b) => (a.seatIndex || 0) - (b.seatIndex || 0)).map(g => (
-                                            <div key={g.id} className="flex justify-between items-center p-2 bg-white rounded-lg shadow-sm border border-gray-100 group">
-                                                <div className="flex items-center gap-2">
-                                                    <select
-                                                        className="bg-gray-100 text-[10px] font-bold rounded px-1 py-0.5 outline-none cursor-pointer hover:bg-gray-200 transition"
-                                                        value={g.seatIndex !== undefined ? g.seatIndex : -1}
-                                                        onChange={async (e) => {
-                                                            const newIndex = parseInt(e.target.value);
-                                                            // Check if seat is taken
-                                                            const currentOccupant = allGuests.find(og => og.tableId === selectedTable.id && og.seatIndex === newIndex);
+                                    <div className="bg-gray-50 rounded-xl p-2 space-y-1 min-h-[100px] max-h-[400px] overflow-y-auto">
+                                        {Array.from({ length: selectedTable.seats }).map((_, i) => {
+                                            const occupant = getGuestsForTable(selectedTable.id).find(g => g.seatIndex === i);
+                                            return (
+                                                <div key={`seat_${i}`} className={`flex justify-between items-center p-2 rounded-lg border transition-all ${occupant ? 'bg-white shadow-sm border-gray-100' : 'bg-transparent border-dashed border-gray-200 opacity-60 hover:opacity-100'}`}>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-[10px] font-bold text-gray-400 w-5 text-center">{i + 1}</span>
+                                                        {occupant ? (
+                                                            <span className="text-sm text-gray-600 font-medium truncate max-w-[130px]" title={occupant.nombre}>{occupant.nombre}</span>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-400 italic">Asiento libre</span>
+                                                        )}
+                                                    </div>
 
-                                                            const updates = [];
-
-                                                            if (currentOccupant) {
-                                                                // Swap current occupant to the new dragged guest's old seat
-                                                                if (currentOccupant.id === 'novio_1' || currentOccupant.id === 'novio_2') {
-                                                                    const pPrefix = currentOccupant.id === 'novio_1' ? 'novio1' : 'novio2';
-                                                                    updates.push(updateDoc(doc(db, 'weddings', weddingId), { [`${pPrefix}_seatIndex`]: g.seatIndex }));
-                                                                } else {
-                                                                    updates.push(updateDoc(doc(db, 'weddings', weddingId, 'guests', currentOccupant.id), { seatIndex: g.seatIndex }));
-                                                                }
-                                                            }
-
-                                                            // Move dragged guest to new seat
-                                                            if (g.id === 'novio_1' || g.id === 'novio_2') {
-                                                                const pPrefix = g.id === 'novio_1' ? 'novio1' : 'novio2';
-                                                                updates.push(updateDoc(doc(db, 'weddings', weddingId), { [`${pPrefix}_seatIndex`]: newIndex }));
-                                                            } else {
-                                                                updates.push(updateDoc(doc(db, 'weddings', weddingId, 'guests', g.id), { seatIndex: newIndex }));
-                                                            }
-
-                                                            await Promise.all(updates);
-                                                        }}
-                                                    >
-                                                        {Array.from({ length: selectedTable.seats }).map((_, i) => (
-                                                            <option key={i} value={i}>{i + 1}</option>
-                                                        ))}
-                                                    </select>
-                                                    <span className="text-sm text-gray-600 truncate max-w-[120px]" title={g.nombre}>{g.nombre}</span>
+                                                    {occupant && (
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="flex gap-0.5 bg-gray-50 p-0.5 rounded-lg border border-gray-100">
+                                                                <button onClick={() => handleSwapSeat(selectedTable.id, occupant, -1)} className="text-gray-400 hover:text-boda-text hover:bg-white rounded px-1.5 py-1 transition text-[10px] shadow-sm" title="Subir (intercambiar)">▲</button>
+                                                                <button onClick={() => handleSwapSeat(selectedTable.id, occupant, 1)} className="text-gray-400 hover:text-boda-text hover:bg-white rounded px-1.5 py-1 transition text-[10px] shadow-sm" title="Bajar (intercambiar)">▼</button>
+                                                            </div>
+                                                            <button onClick={() => unassignGuest(occupant.id)} className="text-red-300 hover:text-red-500 p-1 opacity-50 hover:opacity-100 transition" title="Quitar de mesa">✕</button>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <button onClick={() => unassignGuest(g.id)} className="text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">✕</button>
-                                            </div>
-                                        ))}
-                                        {getGuestsForTable(selectedTable.id).length === 0 && (
-                                            <p className="text-xs text-center text-gray-400 py-4 italic">Arrastra invitados aquí</p>
-                                        )}
+                                            )
+                                        })}
                                     </div>
                                 </div>
 
