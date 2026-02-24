@@ -435,7 +435,7 @@ export default function MesasPage() {
 
     return (
         <div
-            className="h-[calc(100dvh-160px)] md:h-[calc(100vh-160px)] flex flex-col gap-6 overflow-hidden animate-fade-in relative"
+            className="fixed inset-0 top-[96px] bg-boda-bg p-4 pb-[80px] z-40 md:static md:p-0 md:bg-transparent md:h-[calc(100vh-160px)] flex flex-col gap-6 overflow-hidden animate-fade-in md:relative"
         >
             {/* MAIN CONTENT SPLIT */}
             <div className="flex flex-col md:flex-row gap-8 flex-1 min-h-0 relative">
