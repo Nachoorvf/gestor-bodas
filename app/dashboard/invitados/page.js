@@ -771,34 +771,14 @@ export default function InvitadosPage() {
                                     placeholder="Sin teléfono"
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="col-span-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Alergias o Menú</label>
-                                    <input
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#333] transition"
-                                        value={editingGuest.alergias || ''}
-                                        onChange={e => setEditingGuest({ ...editingGuest, alergias: e.target.value })}
-                                        placeholder="Ej: Celíaco"
-                                    />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Canción Pedida</label>
-                                    <input
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#333] transition"
-                                        value={editingGuest.cancion || ''}
-                                        onChange={e => setEditingGuest({ ...editingGuest, cancion: e.target.value })}
-                                        placeholder="Canción propuesta..."
-                                    />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Mensaje de los invitados</label>
-                                    <textarea
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#333] transition resize-none h-16"
-                                        value={editingGuest.mensaje || ''}
-                                        onChange={e => setEditingGuest({ ...editingGuest, mensaje: e.target.value })}
-                                        placeholder="Mensaje de felicitación..."
-                                    />
-                                </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Alergias o Menú</label>
+                                <input
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-[#333] transition"
+                                    value={editingGuest.alergias || ''}
+                                    onChange={e => setEditingGuest({ ...editingGuest, alergias: e.target.value })}
+                                    placeholder="Ej: Celíaco, Vegano..."
+                                />
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Grupo / Etiqueta</label>
