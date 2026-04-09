@@ -1,7 +1,7 @@
 
 export default function AdminTabs({ tabs, activeTab, onChange }) {
     return (
-        <div className="flex gap-2 p-1 bg-white rounded-xl shadow-sm border border-gray-100 w-fit mx-auto md:mx-0">
+        <div className="flex flex-wrap items-center justify-center md:items-start md:justify-start gap-2 p-1.5 md:p-1 bg-white rounded-xl shadow-sm border border-gray-100 w-full md:w-fit mx-auto md:mx-0">
             {tabs.map(tab => (
                 <button
                     key={tab.id}
