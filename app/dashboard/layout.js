@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'firebase/auth';
@@ -9,11 +9,18 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function DashboardLayout({ children }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [scrolled, setScrolled] = useState(false);
     const { userData, stopImpersonation } = useAuth();
     const isAdmin = userData?.role === 'admin';
     const isImpersonating = userData?.isImpersonating;
     const pathname = usePathname();
     const router = useRouter();
+
+    useEffect(() => {
+        const handleScroll = () => setScrolled(window.scrollY > 10);
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -31,111 +38,109 @@ export default function DashboardLayout({ children }) {
     ];
 
     return (
-        <div className="min-h-screen bg-boda-bg font-body selection:bg-boda-accent selection:text-white pb-20 md:pb-0">
-
-            {/* TOP NAVIGATION BAR */}
-            <header className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-xl border-b border-gray-100 transition-all duration-300">
-                {/* Gold Top Accent */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-boda-accent to-transparent opacity-50"></div>
-
-                <div className="max-w-7xl mx-auto px-6 md:px-12 h-24 flex items-center justify-between">
-
+        <div className="min-h-screen bg-apple-bg print:bg-white font-body selection:bg-apple-text/20 selection:text-apple-text pb-20 md:pb-0">
+            
+            {/* TOP NAVIGATION BAR - Full Width Liquid Glass */}
+            <header className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 print:hidden ${scrolled ? 'bg-white/60 backdrop-blur-3xl saturate-[1.8] border-b border-black/5 shadow-sm' : 'bg-transparent'}`}>
+                <div className="max-w-7xl mx-auto px-6 md:px-8 h-16 md:h-20 flex items-center justify-between">
+                    
                     {/* 1. LOGO */}
-                    <div className="flex-shrink-0 group cursor-pointer">
-                        <Link href="/dashboard" className="flex flex-col items-center md:items-start group">
-                            <span className="font-script text-3xl md:text-4xl text-boda-text tracking-wide group-hover:opacity-80 transition-opacity">
+                    <div className="flex-shrink-0 group cursor-pointer mr-8">
+                        <Link href="/dashboard" className="flex items-center group">
+                            <span className="font-script text-2xl text-apple-text font-medium group-hover:opacity-60 transition-opacity">
                                 El Convite
                             </span>
                         </Link>
                     </div>
 
                     {/* 2. DESKTOP NAVIGATION */}
-                    <nav className="hidden md:flex items-center gap-10">
+                    <nav className="hidden md:flex items-center gap-1 lg:gap-2 flex-1">
                         {navItems.map((item) => {
                             const isActive = pathname === item.href;
                             return (
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    className={`text-xs font-bold uppercase tracking-[0.15em] transition-all duration-300 relative py-2 
-                                        ${isActive ? 'text-boda-text' : 'text-gray-400 hover:text-boda-text'}`
+                                    className={`px-4 py-2 text-sm transition-all duration-300 rounded-full
+                                        ${isActive ? 'font-medium text-apple-text bg-black/5' : 'text-apple-text-secondary hover:text-apple-text hover:bg-black/5'}`
                                     }
                                 >
                                     {item.name}
-                                    {isActive && (
-                                        <span className="absolute bottom-0 left-0 w-full h-px bg-boda-accent"></span>
-                                    )}
                                 </Link>
                             );
                         })}
                     </nav>
 
                     {/* 3. ACTIONS & MOBILE TOGGLE */}
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-4">
                         {isAdmin && !isImpersonating && (
                             <button
                                 onClick={() => router.push('/admin')}
-                                className="hidden md:flex items-center gap-2 px-6 py-2.5 text-[10px] uppercase font-bold tracking-widest text-white bg-boda-text hover:bg-black transition-all shadow-lg hover:shadow-xl"
+                                className="hidden md:flex items-center justify-center px-4 py-1.5 text-xs font-medium text-white bg-apple-text rounded-full hover:bg-black transition-colors"
                             >
-                                Admin Panel
+                                Admin
                             </button>
                         )}
 
                         <button
                             onClick={handleLogout}
-                            className="hidden md:flex text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-boda-error transition-colors border-b border-transparent hover:border-boda-error pb-0.5"
+                            className="hidden md:flex text-sm font-medium text-apple-text-secondary hover:text-apple-text transition-colors"
                         >
-                            Cerrar Sesión
+                            Salir
                         </button>
 
                         {/* Mobile Menu Button */}
                         <button
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                            className="md:hidden text-boda-text p-2 hover:bg-gray-50 rounded-full transition"
+                            className="md:hidden text-apple-text p-2 hover:bg-black/5 rounded-full transition-colors relative z-50"
                         >
-                            <span className="text-2xl font-light">{isMobileMenuOpen ? '✕' : '☰'}</span>
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d={isMobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"}></path></svg>
                         </button>
                     </div>
                 </div>
 
-                {/* MOBILE MENU DROPDOWN */}
-                {isMobileMenuOpen && (
-                    <div className="md:hidden absolute top-24 left-0 w-full bg-white/95 backdrop-blur-xl border-b border-gray-100 p-8 shadow-2xl animate-fade-in-up h-screen">
-                        <nav className="flex flex-col space-y-6 text-center">
-                            {navItems.map((item) => (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                    className={`text-xl font-serif italic py-2 ${pathname === item.href ? 'text-boda-accent' : 'text-boda-text'
-                                        }`}
-                                >
-                                    {item.name}
-                                </Link>
-                            ))}
-                            <div className="w-12 h-px bg-gray-200 mx-auto my-4"></div>
+                {/* MOBILE MENU DROPDOWN - Apple Style Frost Overlay */}
+                <div className={`fixed inset-0 top-0 left-0 w-full h-[100dvh] bg-white/70 backdrop-blur-3xl saturate-[1.8] z-40 transition-opacity duration-300 md:hidden flex flex-col pt-24 px-8
+                    ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                    <nav className="flex flex-col space-y-6">
+                        {navItems.map((item) => (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className={`text-2xl font-medium border-b border-black/5 pb-4 transition-colors
+                                    ${pathname === item.href ? 'text-apple-text' : 'text-apple-text-secondary hover:text-apple-text'
+                                    }`}
+                            >
+                                {item.name}
+                            </Link>
+                        ))}
+                        
+                        <div className="pt-8 flex flex-col gap-6">
                             {isAdmin && (
-                                <Link href="/admin" className="text-xs font-bold uppercase tracking-widest text-boda-text">Ir a Admin</Link>
+                                <Link href="/admin" onClick={() => setIsMobileMenuOpen(false)} className="text-xl font-medium text-apple-text">
+                                    Panel de Admin
+                                </Link>
                             )}
-                            <button onClick={handleLogout} className="text-xs font-bold uppercase tracking-widest text-red-400 mt-4">
+                            <button onClick={handleLogout} className="text-xl font-medium text-red-500 text-left">
                                 Cerrar Sesión
                             </button>
-                        </nav>
-                    </div>
-                )}
+                        </div>
+                    </nav>
+                </div>
             </header>
 
             {/* IMPERSONATION BANNER */}
             {isImpersonating && (
-                <div className="fixed bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-bounce-in">
-                    <div className="bg-red-500 text-white px-4 md:px-6 py-2 md:py-3 rounded-full shadow-2xl flex items-center gap-3 border border-red-400">
-                        <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap">
-                            <span className="text-sm">👁️</span>
-                            <span><span className="hidden md:inline">Vista </span>Modo Novios</span>
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-fade-in-up">
+                    <div className="bg-white/80 backdrop-blur-xl saturate-150 px-6 py-3 rounded-full shadow-apple-lg flex items-center gap-4 border border-black/5">
+                        <span className="text-sm font-medium flex items-center gap-2 text-apple-text">
+                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                            Modo Novios
                         </span>
                         <button
                             onClick={stopImpersonation}
-                            className="bg-white text-red-500 px-3 py-1 md:px-4 md:py-1.5 rounded-full text-[9px] md:text-[10px] font-black uppercase hover:bg-red-100 transition shadow-sm"
+                            className="text-sm font-medium text-red-500 hover:text-red-600 transition-colors ml-2"
                         >
                             Salir
                         </button>
@@ -144,7 +149,7 @@ export default function DashboardLayout({ children }) {
             )}
 
             {/* MAIN CONTENT */}
-            <main className="pt-28 pb-12 px-4 md:px-8 max-w-7xl mx-auto min-h-screen animate-fade-in">
+            <main className="pt-28 md:pt-36 pb-16 px-4 md:px-8 max-w-7xl mx-auto min-h-screen relative z-10 print:p-0 print:m-0 print:min-h-0">
                 {children}
             </main>
         </div>

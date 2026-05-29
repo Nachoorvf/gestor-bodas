@@ -4,13 +4,26 @@
 
 html {
   scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  /* Minimal flt background, no patterns */
-  background-color: #FAFAFA;
+  @apply bg-apple-bg text-apple-text font-sans antialiased;
 }
 
-body {
-  @apply bg-boda-bg text-boda-text font-sans;
+/* Clases utilitarias de animación y retrasos */
+.animation-delay-100 { animation-delay: 100ms; }
+.animation-delay-200 { animation-delay: 200ms; }
+.animation-delay-300 { animation-delay: 300ms; }
+.animation-delay-400 { animation-delay: 400ms; }
+.animation-delay-500 { animation-delay: 500ms; }
+
+/* Ocultar barra de desplazamiento en elementos pero permitir hacer scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
