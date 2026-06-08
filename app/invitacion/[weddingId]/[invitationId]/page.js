@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../../../../firebase/config';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy, Clock, Image as ImageIcon, Music, MessageSquare, Send } from 'lucide-react';
 
 export default function InvitationPublicPage() {
@@ -43,24 +43,27 @@ export default function InvitationPublicPage() {
         }
     }, [notification]);
 
-    // Load Data
+    const searchParams = useSearchParams();
+    const isEditor = searchParams.get('editor') === 'true';
+
     useEffect(() => {
         if (!weddingId || !invitationId) return;
 
         const loadData = async () => {
             try {
-                const wSnap = await getDoc(doc(db, 'weddings', weddingId));
-                if (wSnap.exists()) setWeddingData(wSnap.data());
-
-                if (invitationId === 'preview') {
-                    setInvitation({ id: 'preview', guestInfo: { name: 'Modo Previsualización' } });
+                if (invitationId === 'preview' || isEditor) {
+                    setInvitation({ id: 'preview', guestInfo: { name: 'Modo Previsualización' }, name: 'Modo Previsualización' });
                     setGuests([
                         { id: 'demo1', nombre: 'Invitado de Prueba 1' },
                         { id: 'demo2', nombre: 'Invitado de Prueba 2' }
                     ]);
+                    setWeddingData({ invitationConfig: {} });
                     setLoading(false);
                     return;
                 }
+
+                const wSnap = await getDoc(doc(db, 'weddings', weddingId));
+                if (wSnap.exists()) setWeddingData(wSnap.data());
 
                 const invSnap = await getDoc(doc(db, 'weddings', weddingId, 'invitations', invitationId));
                 if (!invSnap.exists()) {
@@ -90,13 +93,10 @@ export default function InvitationPublicPage() {
     useEffect(() => {
         const handleMessage = (event) => {
             if (event.data?.type === 'UPDATE_CONFIG') {
-                setWeddingData(prev => {
-                    if (!prev) return prev;
-                    return {
-                        ...prev,
-                        invitationConfig: event.data.config
-                    };
-                });
+                setWeddingData(prev => ({
+                    ...(prev || {}),
+                    invitationConfig: event.data.config
+                }));
             }
         };
 

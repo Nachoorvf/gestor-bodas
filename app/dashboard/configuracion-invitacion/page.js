@@ -76,9 +76,9 @@ export default function InvitationConfigPage() {
                         const snapInv = await getDocs(qInv);
                         if (!snapInv.empty) {
                             const demoId = snapInv.docs[0].id;
-                            setPreviewUrl(`/invitacion/${wId}/${demoId}`);
+                            setPreviewUrl(`/invitacion/${wId}/${demoId}?editor=true`);
                         } else {
-                            setPreviewUrl(`/invitacion/${wId}/preview`);
+                            setPreviewUrl(`/invitacion/${wId}/preview?editor=true`);
                         }
                     }
                 } catch (error) {
