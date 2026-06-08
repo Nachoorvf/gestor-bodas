@@ -41,7 +41,7 @@ export default function InvitadosPage() {
 
     // 1. AUTH & INIT
     useEffect(() => {
-        if (!authLoading && !user) router.push('/login');
+        if (authLoading) return;
     }, [user, authLoading, router]);
 
     const weddingId = userData?.weddingId;

@@ -20,7 +20,7 @@ export default function AdminRequests({ requests, onApprove, onReject, loading }
                     </div>
 
                     <h3 className="font-serif font-bold text-xl text-boda-text mb-1">
-                        {req.novios.join(' & ')}
+                        {req.novios ? req.novios.join(' & ') : [req.novio1, req.novio2].filter(Boolean).join(' & ')}
                     </h3>
                     <p className="text-sm text-gray-500 font-medium mb-4">📅 {req.fecha}</p>
 

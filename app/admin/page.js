@@ -2,9 +2,9 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../firebase/config';
 import { collection, query, onSnapshot, orderBy, doc, updateDoc, addDoc, where, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
+import { signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { deleteWedding } from '../actions';
+import { deleteWedding, deleteUserAccount } from '../actions';
 import { useAuth } from '../../context/AuthContext';
 import {
   Users, Gem, Calendar, Search, Plus,
@@ -22,7 +22,7 @@ import AdminUsersTable from '../../components/admin/AdminUsersTable';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { user, userData, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading, impersonateWedding } = useAuth();
   const isAuthorized = user && userData?.role === 'admin';
 
   // --- STATE ---
@@ -90,20 +90,48 @@ export default function AdminDashboard() {
   };
 
   const handleApproveRequest = async (request) => {
-    if (!confirm(`¿Aprobar boda para ${request.novios.join(' & ')}?`)) return;
+    const coupleNames = request.novios ? request.novios.join(' & ') : [request.novio1, request.novio2].filter(Boolean).join(' & ');
+    if (!confirm(`¿Aprobar boda para ${coupleNames}?`)) return;
     setActionLoading(true);
     try {
+      // 1. Verify user exists
+      const userRef = doc(db, 'users', request.userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+          alert("❌ Error: Esta solicitud pertenece a un usuario que ya no existe (probablemente fue borrado). Por favor, rechaza/elimina esta solicitud.");
+          setActionLoading(false);
+          return;
+      }
+
+      // 2. Create wedding
       const weddingData = {
-        novios: request.novios,
+        novios: request.novios || [request.novio1, request.novio2].filter(Boolean),
         fecha: request.fecha,
         creadoEn: new Date().toISOString(),
         adminId: request.userId,
         invitationConfig: { location: { enabled: false }, bank: { enabled: false }, timeline: { enabled: false } }
       };
-
+      
       const weddingRef = await addDoc(collection(db, 'weddings'), weddingData);
-      await updateDoc(doc(db, 'users', request.userId), { weddingId: weddingRef.id });
+      
+      // 3. Update user and request
+      await updateDoc(userRef, { weddingId: weddingRef.id });
       await updateDoc(doc(db, 'wedding_requests', request.id), { status: 'approved', processedAt: new Date().toISOString() });
+
+      // Audit Log for Approval
+      try {
+          await addDoc(collection(db, 'audit_logs'), {
+              action: 'APPROVE_WEDDING',
+              adminId: user.uid,
+              adminEmail: user.email,
+              targetWeddingId: weddingRef.id,
+              targetUserId: request.userId,
+              timestamp: new Date().toISOString()
+          });
+      } catch (auditError) {
+          console.error("Audit log failed, but approval succeeded:", auditError);
+      }
 
       alert("✅ Solicitud Aprobada");
     } catch (e) {
@@ -125,18 +153,46 @@ export default function AdminDashboard() {
     if (!confirm(`¿Borrar usuario ${targetUser.email} y TODOS sus datos?`)) return;
     setActionLoading(true);
     try {
-      const batch = writeBatch(db);
-      if (targetUser.weddingId) {
-        // Delete subcollections manually (client-side specific logic for now if server action doesn't cover it)
-        // Ideally this should be a cloud function or server action too.
-        // For simplicity reusing logic:
-        batch.delete(doc(db, 'weddings', targetUser.weddingId));
+      const token = await user.getIdToken();
+      const result = await deleteUserAccount(token, targetUser.id);
+      
+      if (result.success) {
+        alert("✅ " + result.message);
+      } else {
+        throw new Error(result.message);
       }
-      batch.delete(doc(db, 'users', targetUser.id));
-      await batch.commit();
-      alert("✅ Usuario eliminado");
     } catch (e) { alert("Error: " + e.message); }
     finally { setActionLoading(false); }
+  };
+
+  const handleResetPassword = async (email) => {
+    if (!email) return;
+    if (!confirm(`¿Enviar enlace de recuperación de contraseña a ${email}?`)) return;
+    
+    setActionLoading(true);
+    try {
+        await sendPasswordResetEmail(auth, email);
+        
+        // Audit log
+        try {
+            await addDoc(collection(db, 'audit_logs'), {
+                action: 'SEND_PASSWORD_RESET',
+                adminId: user.uid,
+                adminEmail: user.email,
+                targetEmail: email,
+                timestamp: new Date().toISOString()
+            });
+        } catch (auditError) {
+            console.error("Audit log failed:", auditError);
+        }
+        
+        alert("✅ Correo de recuperación enviado.");
+    } catch (e) {
+        console.error(e);
+        alert("❌ Error al enviar correo: " + e.message);
+    } finally {
+        setActionLoading(false);
+    }
   };
 
   const handleUpdateUser = async (e) => {
@@ -147,8 +203,25 @@ export default function AdminDashboard() {
         displayName: editingUser.displayName || null,
         email: editingUser.email || null,
         role: editingUser.role || 'user',
-        weddingId: editingUser.weddingId || null
+        weddingId: editingUser.weddingId || null,
+        status: editingUser.status || 'active'
       });
+      
+      // Audit Log for suspension
+      if (editingUser.status === 'suspended') {
+          try {
+              await addDoc(collection(db, 'audit_logs'), {
+                  action: 'SUSPEND_USER',
+                  adminId: user.uid,
+                  adminEmail: user.email,
+                  targetUserId: editingUser.id,
+                  timestamp: new Date().toISOString()
+              });
+          } catch (auditError) {
+              console.error("Audit log failed:", auditError);
+          }
+      }
+      
       alert("✅ Usuario actualizado correctamente");
       setEditingUser(null);
     } catch (error) {
@@ -184,6 +257,13 @@ export default function AdminDashboard() {
   // Filter Logic
   const filteredUsers = users.filter(u => (u.email || '').toLowerCase().includes(searchTerm.toLowerCase()) || (u.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredWeddings = bodas.filter(b => b.novios?.some(n => (n || '').toLowerCase().includes(searchTerm.toLowerCase())) || (b.id || '').includes(searchTerm));
+
+  // Growth Metrics (Last 30 days)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  
+  const recentUsersCount = users.filter(u => u.createdAt && new Date(u.createdAt) > thirtyDaysAgo).length;
+  const recentWeddingsCount = bodas.filter(b => b.creadoEn && new Date(b.creadoEn) > thirtyDaysAgo).length;
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] font-sans text-[#333]">
@@ -256,8 +336,8 @@ export default function AdminDashboard() {
             <div className="space-y-8">
               {/* KPI CARDS - Responsive Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                <AdminStatsCard title="Usuarios" value={users.length} icon={<Users size={20} />} color="bg-gray-50 text-gray-500" />
-                <AdminStatsCard title="Bodas" value={bodas.length} icon={<Gem size={20} />} color="bg-gray-50 text-gray-500" />
+                <AdminStatsCard title="Usuarios" value={users.length} subtitle={`+${recentUsersCount} últimos 30d`} icon={<Users size={20} />} color="bg-gray-50 text-gray-500" />
+                <AdminStatsCard title="Bodas" value={bodas.length} subtitle={`+${recentWeddingsCount} últimos 30d`} icon={<Gem size={20} />} color="bg-gray-50 text-gray-500" />
                 <AdminStatsCard title="Solicitudes" value={solicitudes.length} icon={<Calendar size={20} />} color={solicitudes.length > 0 ? "bg-[#C5A065] text-white" : "bg-gray-50 text-gray-500"} />
                 <AdminStatsCard title="Ingresos" value="0€" icon={<Euro size={20} />} color="bg-gray-50 text-gray-500" />
               </div>
@@ -286,7 +366,14 @@ export default function AdminDashboard() {
 
           {/* USERS TAB */}
           {activeTab === 'users' && (
-            <AdminUsersTable users={filteredUsers} requests={solicitudes} onDelete={handleDeleteUser} onEdit={setEditingUser} />
+            <AdminUsersTable 
+              users={filteredUsers} 
+              requests={solicitudes} 
+              onDelete={handleDeleteUser} 
+              onEdit={setEditingUser} 
+              onResetPassword={handleResetPassword}
+              onImpersonate={impersonateWedding}
+            />
           )}
 
         </div>
@@ -346,6 +433,18 @@ export default function AdminDashboard() {
                       placeholder="Ninguna"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Estado de la Cuenta</label>
+                  <select
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:border-[#C5A065] outline-none appearance-none"
+                    value={editingUser.status || 'active'}
+                    onChange={e => setEditingUser({ ...editingUser, status: e.target.value })}
+                  >
+                    <option value="active">🟢 Activa</option>
+                    <option value="suspended">🔴 Suspendida (Baneado)</option>
+                  </select>
                 </div>
 
                 <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-50">
