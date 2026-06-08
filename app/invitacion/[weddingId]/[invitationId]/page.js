@@ -51,19 +51,26 @@ export default function InvitationPublicPage() {
 
         const loadData = async () => {
             try {
+                // Fetch wedding data first to get invitationConfig and names even in preview/editor
+                const wSnap = await getDoc(doc(db, 'weddings', weddingId));
+                let wData = null;
+                if (wSnap.exists()) {
+                    wData = wSnap.data();
+                    setWeddingData(wData);
+                }
+
                 if (invitationId === 'preview' || isEditor) {
                     setInvitation({ id: 'preview', guestInfo: { name: 'Modo Previsualización' }, name: 'Modo Previsualización' });
                     setGuests([
                         { id: 'demo1', nombre: 'Invitado de Prueba 1' },
                         { id: 'demo2', nombre: 'Invitado de Prueba 2' }
                     ]);
-                    setWeddingData({ invitationConfig: {} });
+                    if (!wData) {
+                        setWeddingData({ invitationConfig: {} });
+                    }
                     setLoading(false);
                     return;
                 }
-
-                const wSnap = await getDoc(doc(db, 'weddings', weddingId));
-                if (wSnap.exists()) setWeddingData(wSnap.data());
 
                 const invSnap = await getDoc(doc(db, 'weddings', weddingId, 'invitations', invitationId));
                 if (!invSnap.exists()) {
@@ -101,6 +108,10 @@ export default function InvitationPublicPage() {
         };
 
         window.addEventListener('message', handleMessage);
+        
+        // Notify parent that the iframe is ready to receive configuration
+        window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+
         return () => window.removeEventListener('message', handleMessage);
     }, []);
 
@@ -187,8 +198,8 @@ export default function InvitationPublicPage() {
         const config = weddingData?.invitationConfig;
         if (!config) return null;
 
-        // UNIFIED LIST
-        const fixed = ['location', 'timeline', 'bank'].map(key => ({
+        // UNIFIED LIST — includes RSVP so it respects user-defined order
+        const fixed = ['location', 'timeline', 'bank', 'rsvp'].map(key => ({
             id: key,
             type: 'fixed',
             order: config[key]?.order || 99,
@@ -199,13 +210,14 @@ export default function InvitationPublicPage() {
             isCustom: true
         }));
 
-        const allItems = [...fixed, ...custom].sort((a, b) => a.order - b.order);
+        // Filter: location/timeline/bank require enabled; rsvp is always shown
+        const allItems = [...fixed, ...custom]
+            .filter(item => item.id === 'rsvp' || item.isCustom || item.enabled)
+            .sort((a, b) => a.order - b.order);
 
         return (
             <div className="flex flex-col items-center gap-6 mt-12 w-full max-w-lg mx-auto animate-fade-in-up" style={{ animationDelay: '200ms' }}>
                 {allItems.map(item => {
-                    if (!item.enabled && !item.isCustom) return null; // Fixed modules have enabled flag
-                    // Removed global check for empty content to allow placeholders
 
                     // --- FIXED MODULES ---
                     if (item.id === 'location') {
@@ -232,38 +244,72 @@ export default function InvitationPublicPage() {
                     }
                     if (item.id === 'bank') {
                         return (
-                            <div key={item.id} className="w-full flex items-center justify-center -mt-2 mb-4 animate-fade-in-up">
-                                <div className="w-full max-w-sm flex flex-col overflow-hidden transition-all duration-300">
-                                    <button
-                                        onClick={() => setIsGiftExpanded(!isGiftExpanded)}
-                                        className="w-full flex items-center justify-center gap-2 py-4 opacity-70 hover:opacity-100 transition-opacity"
-                                    >
-                                        <Gift size={14} className="text-[#333]" />
-                                        <p className="font-serif text-[#333] text-sm italic">{item.title || 'Un detalle para nosotros'}</p>
-                                    </button>
+                            <div key={item.id} className="w-full animate-fade-in-up">
+                                {/* Collapsed trigger — card style matching other modules */}
+                                <button
+                                    onClick={() => setIsGiftExpanded(!isGiftExpanded)}
+                                    className={`w-full flex items-center gap-4 px-6 py-5 rounded-2xl border shadow-sm transition-all duration-300 group
+                                        ${isGiftExpanded
+                                            ? 'bg-[var(--primary)]/5 border-[var(--primary)]/30'
+                                            : 'bg-white/60 backdrop-blur border-white/50 hover:bg-white'}`}
+                                >
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-all duration-300
+                                        ${isGiftExpanded ? 'bg-[var(--primary)] text-white' : 'bg-[var(--primary)] text-white group-hover:scale-110'}`}>
+                                        <Gift size={20} />
+                                    </div>
+                                    <div className="text-left flex-1 min-w-0">
+                                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Lista de Bodas'}</p>
+                                        <p className="font-serif text-[#333] text-lg">{isGiftExpanded ? 'Ver detalles' : (item.subtitle || 'Hacernos un regalo')}</p>
+                                    </div>
+                                    <div className={`w-7 h-7 rounded-full border border-gray-200 bg-white flex items-center justify-center transition-transform duration-300 ${isGiftExpanded ? 'rotate-180' : ''}`}>
+                                        <ChevronDown size={14} className="text-gray-400" />
+                                    </div>
+                                </button>
 
-                                    <div className={`transition-all duration-500 ease-in-out ${isGiftExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
-                                        <div className="px-6 pb-6 pt-2 space-y-5">
+                                {/* Expanded content */}
+                                <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isGiftExpanded ? 'max-h-[400px] opacity-100 mt-2' : 'max-h-0 opacity-0 mt-0'}`}>
+                                    <div className="bg-white/70 backdrop-blur border border-[var(--primary)]/15 rounded-2xl px-6 py-5 space-y-4 shadow-sm">
+                                        {(item.message) && (
                                             <p className="font-serif text-sm text-[#333] leading-relaxed text-center italic opacity-80">
-                                                "{item.message || 'Vuestra presencia es nuestro mayor regalo.'}"
+                                                &ldquo;{item.message}&rdquo;
                                             </p>
-                                            {item.iban && (
-                                                <div
-                                                    className="bg-white/40 backdrop-blur-sm p-4 rounded-xl border border-white/40 flex flex-col items-center gap-2 group/iban cursor-pointer hover:bg-white/60 transition shadow-sm mx-auto w-full max-w-[280px]"
-                                                    onClick={() => copyToClipboard(item.iban)}
-                                                >
-                                                    <p className="text-[10px] uppercase tracking-widest text-[#333] font-bold opacity-60">Número de Cuenta</p>
-                                                    <div className="flex items-center gap-3">
-                                                        <p className="font-mono text-sm text-[#333] font-medium tracking-wider">{item.iban}</p>
-                                                        {copiedIban ? <Check size={16} className="text-green-600" /> : <Copy size={16} className="text-[#333] opacity-40 group-hover/iban:opacity-80 transition-opacity" />}
+                                        )}
+                                        {item.iban && (
+                                            <div
+                                                onClick={() => copyToClipboard(item.iban)}
+                                                className="cursor-pointer group/iban bg-white rounded-2xl p-4 border border-[var(--primary)]/20 hover:border-[var(--primary)]/50 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col items-center gap-2"
+                                            >
+                                                <p className="text-[10px] uppercase tracking-[0.18em] text-gray-400 font-bold">Número de Cuenta</p>
+                                                <div className="flex items-center gap-3">
+                                                    <p className="font-mono text-base text-[#333] font-semibold tracking-wider">{item.iban}</p>
+                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200
+                                                        ${copiedIban ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400 group-hover/iban:bg-[var(--primary)]/10 group-hover/iban:text-[var(--primary)]'}`}>
+                                                        {copiedIban ? <Check size={14} /> : <Copy size={14} />}
                                                     </div>
-                                                    <p className="text-[10px] text-[#333] mt-1 opacity-50">{copiedIban ? '¡Copiado al portapapeles!' : 'Pincha para copiar'}</p>
                                                 </div>
-                                            )}
-                                        </div>
+                                                <p className="text-[10px] text-gray-400 font-medium">
+                                                    {copiedIban ? '✓ Copiado al portapapeles' : 'Toca para copiar el IBAN'}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
+                        );
+                    }
+                    // RSVP button in-order
+                    if (item.id === 'rsvp') {
+                        return (
+                            <button
+                                key="rsvp"
+                                onClick={() => setActiveModal('rsvp')}
+                                className="group relative w-full max-w-sm bg-[var(--primary)] text-white px-10 py-5 rounded-full font-bold uppercase tracking-[0.2em] text-sm hover:opacity-90 transition-all shadow-2xl hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+                            >
+                                <span className="relative z-10 flex items-center justify-center gap-2">
+                                    Confirmar Asistencia <ChevronDown size={16} className="animate-bounce" />
+                                </span>
+                                <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                            </button>
                         );
                     }
 
@@ -457,18 +503,6 @@ export default function InvitationPublicPage() {
                     </div>
 
                     {renderModules()}
-                </div>
-
-                <div className="relative z-20 pb-12 px-6 flex justify-center mt-auto">
-                    <button
-                        onClick={() => setActiveModal('rsvp')}
-                        className="group relative bg-[var(--primary)] text-white px-10 py-5 rounded-full font-bold uppercase tracking-[0.2em] text-sm hover:opacity-90 transition-all shadow-2xl hover:shadow-xl hover:-translate-y-1 w-full max-w-sm overflow-hidden"
-                    >
-                        <span className="relative z-10 flex items-center justify-center gap-2">
-                            Confirmar Asistencia <ChevronDown size={16} className="animate-bounce" />
-                        </span>
-                        <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                    </button>
                 </div>
             </div>
 
