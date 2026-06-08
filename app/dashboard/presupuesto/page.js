@@ -31,13 +31,10 @@ export default function PresupuestoPage() {
     const categories = ['Lugar', 'Comida', 'Música', 'Foto/Video', 'Ropa', 'Decoración', 'Otros'];
 
     useEffect(() => {
-        if (!authLoading) {
-            if (!user) {
-                router.push('/login');
-            } else if (userData?.weddingId) {
-                setWeddingId(userData.weddingId);
-                setLoading(false);
-            }
+        if (authLoading) return;
+        if (userData?.weddingId) {
+            setWeddingId(userData.weddingId);
+            setLoading(false);
         }
     }, [user, userData, authLoading, router]);
 

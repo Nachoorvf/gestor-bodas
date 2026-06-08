@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'firebase/auth';
@@ -9,11 +9,26 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function DashboardLayout({ children }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const { userData, stopImpersonation } = useAuth();
+    const { user, userData, loading: authLoading, stopImpersonation } = useAuth();
     const isAdmin = userData?.role === 'admin';
     const isImpersonating = userData?.isImpersonating;
     const pathname = usePathname();
     const router = useRouter();
+
+    useEffect(() => {
+        if (authLoading) return;
+        
+        // 1. Unauthenticated users go to login
+        if (!user) {
+            router.push('/login');
+            return;
+        }
+
+        // 2. Authenticated users without a wedding (and not admin) go to lobby
+        if (userData !== null && userData?.role !== 'admin' && !userData?.weddingId) {
+            router.push('/request-wedding');
+        }
+    }, [user, userData, authLoading, router]);
 
     const handleLogout = async () => {
         await signOut(auth);

@@ -27,9 +27,21 @@ export async function deleteWedding(token, weddingId) {
     if (!usersSnapshot.empty) {
       const userDoc = usersSnapshot.docs[0];
       const uid = userDoc.id;
+      
       // Borrar de Auth y de DB
       await authAdmin.deleteUser(uid);
       await dbAdmin.collection('users').doc(uid).delete();
+      
+      // Borrar la solicitud de boda pendiente/aprobada de este usuario
+      const requestsSnapshot = await dbAdmin.collection('wedding_requests')
+        .where('userId', '==', uid)
+        .get();
+        
+      if (!requestsSnapshot.empty) {
+        const batchReq = dbAdmin.batch();
+        requestsSnapshot.docs.forEach(doc => batchReq.delete(doc.ref));
+        await batchReq.commit();
+      }
     }
 
     // 2. LIMPIEZA DE INVITADOS (¡NUEVO!) 🧹

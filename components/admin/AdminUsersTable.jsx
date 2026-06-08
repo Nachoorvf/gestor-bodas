@@ -1,8 +1,9 @@
 import Link from 'next/link';
 
-export default function AdminUsersTable({ users, requests = [], onDelete, onEdit }) {
+export default function AdminUsersTable({ users, requests = [], onDelete, onEdit, onResetPassword, onImpersonate }) {
 
     const getUserStatus = (user) => {
+        if (user.status === 'suspended') return { label: 'Suspendida', color: 'bg-red-100 text-red-700 border-red-200' };
         if (user.weddingId) return { label: 'Activa', color: 'bg-green-100 text-green-700 border-green-200' };
         // Check if there is a pending request for this user (assuming requests have userId or userEmail)
         // Adjust property lookup based on your request object structure (usually userId or userEmail)
@@ -67,6 +68,22 @@ export default function AdminUsersTable({ users, requests = [], onDelete, onEdit
                                     </td>
                                     <td className="p-8 text-right">
                                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {u.weddingId && (
+                                                <button
+                                                    onClick={() => onImpersonate(u.weddingId)}
+                                                    className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
+                                                    title="Dar Soporte (Entrar como Usuario)"
+                                                >
+                                                    👁️
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => onResetPassword(u.email)}
+                                                className="p-2 text-gray-400 hover:text-orange-500 transition-colors"
+                                                title="Enviar Email Reset Contraseña"
+                                            >
+                                                📧
+                                            </button>
                                             <button
                                                 onClick={() => onEdit(u)}
                                                 className="p-2 text-gray-400 hover:text-black transition-colors"
@@ -130,16 +147,30 @@ export default function AdminUsersTable({ users, requests = [], onDelete, onEdit
                             </div>
 
                             {/* Actions */}
-                            <div className="flex items-center justify-end gap-4 pt-2">
+                            <div className="flex flex-wrap items-center justify-end gap-4 pt-2">
+                                {u.weddingId && (
+                                    <button
+                                        onClick={() => onImpersonate(u.weddingId)}
+                                        className="flex items-center gap-2 text-[10px] font-bold text-blue-400 uppercase tracking-widest hover:text-blue-600 transition-colors"
+                                    >
+                                        <span>👁️ Entrar</span>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => onResetPassword(u.email)}
+                                    className="flex items-center gap-2 text-[10px] font-bold text-orange-400 uppercase tracking-widest hover:text-orange-600 transition-colors"
+                                >
+                                    <span>📧 Reset Pass</span>
+                                </button>
                                 <button
                                     onClick={() => onEdit(u)}
-                                    className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest hover:text-black transition-colors"
+                                    className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-black transition-colors"
                                 >
                                     <span>✏️ Editar</span>
                                 </button>
                                 <button
                                     onClick={() => onDelete(u)}
-                                    className="flex items-center gap-2 text-xs font-bold text-red-300 uppercase tracking-widest hover:text-red-500 transition-colors"
+                                    className="flex items-center gap-2 text-[10px] font-bold text-red-300 uppercase tracking-widest hover:text-red-500 transition-colors"
                                 >
                                     <span>✕ Eliminar</span>
                                 </button>

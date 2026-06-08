@@ -40,12 +40,6 @@ export default function DashboardOverview() {
   });
 
   useEffect(() => {
-    // 1. Auth Check
-    if (!authLoading && !user) {
-      router.push('/login');
-      return;
-    }
-
     // 2. Fetch Data
     const fetchWeddingDetails = async () => {
       if (userData?.weddingId) {

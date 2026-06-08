@@ -30,15 +30,10 @@ export default function BusPage() {
     const [passengers, setPassengers] = useState([]);
 
     // 1. Auth Check
+    // 1. Auth Check
     useEffect(() => {
-        if (!authLoading) {
-            if (!user) {
-                router.push('/login');
-            } else if (userData?.weddingId) {
-                // Wait for weddingId to be set before fetching data
-            }
-        }
-    }, [user, userData, authLoading, router]);
+        if (authLoading) return;
+    }, [authLoading]);
 
     // 2. Fetch Data
     useEffect(() => {

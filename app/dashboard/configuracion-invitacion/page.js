@@ -46,7 +46,7 @@ export default function InvitationConfigPage() {
     // 1. LOAD DATA
     useEffect(() => {
         if (authLoading) return;
-        if (!user) { router.push('/login'); return; }
+        if (authLoading) return;
 
         const loadWedding = async () => {
             if (userData?.weddingId) {

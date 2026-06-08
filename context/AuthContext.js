@@ -1,8 +1,8 @@
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../firebase/config';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, collection, addDoc, onSnapshot } from 'firebase/firestore';
 import { useRouter, usePathname } from 'next/navigation';
 
 const AuthContext = createContext();
@@ -24,15 +24,33 @@ export const AuthProvider = ({ children }) => {
 
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setLoading(true);
+            let userUnsub;
             if (currentUser) {
                 setUser(currentUser);
                 try {
-                    const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-                    if (userDoc.exists()) {
-                        setUserData(userDoc.data());
-                    }
+                    userUnsub = onSnapshot(doc(db, 'users', currentUser.uid), async (userDoc) => {
+                        if (userDoc.exists()) {
+                            const data = userDoc.data();
+                            if (data.status === 'suspended') {
+                                await signOut(auth);
+                                setUser(null);
+                                setUserData(null);
+                                alert('Su cuenta ha sido suspendida. Contacte con soporte.');
+                                router.push('/login');
+                            } else {
+                                setUserData(data);
+                            }
+                        } else {
+                            // The user document was deleted (e.g. by admin deleting the wedding)
+                            // We must log them out locally to avoid ghost sessions
+                            await signOut(auth);
+                            setUser(null);
+                            setUserData(null);
+                            router.push('/login');
+                        }
+                    });
                 } catch (error) {
-                    console.error("Error fetching user data:", error);
+                    console.error("Error setting up user listener:", error);
                 }
             } else {
                 setUser(null);
@@ -41,15 +59,35 @@ export const AuthProvider = ({ children }) => {
                 localStorage.removeItem('impersonatedWeddingId');
             }
             setLoading(false);
+            
+            return () => {
+                if (userUnsub) userUnsub();
+            };
         });
 
         return () => unsubscribe();
     }, []);
 
     // Helper to start impersonation
-    const impersonateWedding = (weddingId) => {
+    const impersonateWedding = async (weddingId) => {
         setImpersonatedWeddingId(weddingId);
         localStorage.setItem('impersonatedWeddingId', weddingId);
+        
+        // Audit log
+        if (user && userData?.role === 'admin') {
+            try {
+                await addDoc(collection(db, 'audit_logs'), {
+                    action: 'IMPERSONATE_WEDDING',
+                    adminId: user.uid,
+                    adminEmail: user.email,
+                    targetWeddingId: weddingId,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (e) {
+                console.error("Audit log failed, but impersonation will proceed:", e);
+            }
+        }
+        
         router.push('/dashboard');
     };
 

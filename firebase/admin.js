@@ -31,5 +31,20 @@ if (!admin.apps.length) {
   }
 }
 
-export const dbAdmin = admin.firestore();
-export const authAdmin = admin.auth();
+// En vez de exportar directamente las instancias (lo que crashea si falla initializeApp),
+// exportamos funciones getter o comprobamos si hay apps inicializadas.
+
+let dbAdmin;
+let authAdmin;
+
+if (admin.apps.length > 0) {
+    dbAdmin = admin.firestore();
+    authAdmin = admin.auth();
+} else {
+    // Si no hay app inicializada, creamos proxies o funciones que lancen el error solo al USARLAS, no al IMPORTARLAS.
+    const throwError = () => { throw new Error("Firebase Admin no está inicializado. Falta el archivo service-account.json."); };
+    dbAdmin = { collection: throwError, batch: throwError };
+    authAdmin = { verifyIdToken: throwError, deleteUser: throwError };
+}
+
+export { dbAdmin, authAdmin };

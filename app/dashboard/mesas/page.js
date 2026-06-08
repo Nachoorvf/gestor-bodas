@@ -101,10 +101,9 @@ export default function MesasPage() {
         }
     }, []);
 
-    // 1. Auth Check
     useEffect(() => {
-        if (!authLoading && !user) router.push('/login');
-    }, [user, authLoading, router]);
+        if (authLoading) return;
+    }, [authLoading]);
 
     // 2. Data Listeners
     useEffect(() => {
