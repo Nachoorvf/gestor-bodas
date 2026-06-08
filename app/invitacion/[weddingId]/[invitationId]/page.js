@@ -3,7 +3,143 @@ import { useState, useEffect, useRef } from 'react';
 import { db } from '../../../../firebase/config';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { useParams, useSearchParams } from 'next/navigation';
-import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy, Clock, Image as ImageIcon, Music, MessageSquare, Send } from 'lucide-react';
+import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy, Clock, Image as ImageIcon, Music, MessageSquare, Send, Bus, ArrowRight, ArrowLeft, X, ChevronRight } from 'lucide-react';
+
+// ─── BUS SELECTION SHEET ─────────────────────────────────────────────────────
+function BusSheet({ guest, busConfig, onUpdate, onClose }) {
+    if (!guest || !busConfig) return null;
+
+    const busObj = (typeof guest.bus === 'object' && guest.bus) ? guest.bus : { ida: null, vuelta: null };
+    const hasIda = busConfig.ida?.enabled && busConfig.ida?.stops?.length > 0;
+    const hasVuelta = busConfig.vuelta?.enabled && busConfig.vuelta?.stops?.length > 0;
+
+    const StopOption = ({ stop, selected, onClick }) => (
+        <button
+            onClick={onClick}
+            className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${
+                selected
+                    ? 'border-[var(--primary)] bg-[var(--primary)]/5 shadow-sm'
+                    : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'
+            }`}
+        >
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                selected ? 'bg-[var(--primary)] text-white' : 'bg-gray-100 text-gray-400'
+            }`}>
+                <Clock size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+                {stop.time && <p className={`text-xl font-bold ${selected ? 'text-[var(--primary)]' : 'text-[#333]'}`}>{stop.time}</p>}
+                {stop.location && <p className="text-sm text-gray-500 truncate">{stop.location}</p>}
+            </div>
+            {selected && (
+                <div className="w-6 h-6 rounded-full bg-[var(--primary)] flex items-center justify-center shrink-0">
+                    <Check size={12} className="text-white" />
+                </div>
+            )}
+        </button>
+    );
+
+    return (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center">
+            {/* Backdrop */}
+            <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={onClose}
+                style={{ animation: 'fadeIn 0.2s ease' }}
+            />
+            {/* Sheet */}
+            <div
+                className="relative bg-white w-full max-w-lg rounded-t-[2.5rem] shadow-2xl flex flex-col max-h-[85vh]"
+                style={{ animation: 'slideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
+            >
+                {/* Handle */}
+                <div className="flex justify-center pt-4 pb-2 shrink-0">
+                    <div className="w-10 h-1 rounded-full bg-gray-200" />
+                </div>
+
+                {/* Header */}
+                <div className="px-6 pb-4 pt-2 flex items-center justify-between shrink-0">
+                    <div>
+                        <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-0.5">Autobús para</p>
+                        <h3 className="font-serif text-2xl text-[#333]">{guest.nombre}</h3>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 transition"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="overflow-y-auto px-6 pb-8 space-y-8">
+                    {hasIda && (
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <ArrowRight size={14} className="text-gray-400" />
+                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Parada de Ida</p>
+                            </div>
+                            <div className="space-y-2">
+                                {busConfig.ida.stops.map(stop => (
+                                    <StopOption
+                                        key={stop.id}
+                                        stop={stop}
+                                        selected={busObj.ida === stop.id}
+                                        onClick={() => {
+                                            const newId = busObj.ida === stop.id ? null : stop.id;
+                                            onUpdate(guest.id, 'busStop', { dir: 'ida', stopId: newId });
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {hasVuelta && (
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <ArrowLeft size={14} className="text-gray-400" />
+                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Parada de Vuelta</p>
+                            </div>
+                            <div className="space-y-2">
+                                {busConfig.vuelta.stops.map(stop => (
+                                    <StopOption
+                                        key={stop.id}
+                                        stop={stop}
+                                        selected={busObj.vuelta === stop.id}
+                                        onClick={() => {
+                                            const newId = busObj.vuelta === stop.id ? null : stop.id;
+                                            onUpdate(guest.id, 'busStop', { dir: 'vuelta', stopId: newId });
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {busConfig.notes && (
+                        <div className="bg-stone-50 rounded-2xl p-4">
+                            <p className="text-xs text-gray-500 italic leading-relaxed">{busConfig.notes}</p>
+                        </div>
+                    )}
+
+                    {/* Confirm */}
+                    <button
+                        onClick={onClose}
+                        className="w-full bg-[var(--primary)] text-white py-4 rounded-2xl font-bold uppercase tracking-[0.15em] text-sm transition hover:opacity-90 active:scale-[0.98]"
+                    >
+                        Confirmar Paradas
+                    </button>
+                </div>
+            </div>
+
+            <style>{`
+                @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            `}</style>
+        </div>
+    );
+}
 
 export default function InvitationPublicPage() {
     const { weddingId, invitationId } = useParams();
@@ -19,6 +155,9 @@ export default function InvitationPublicPage() {
     const [activeModal, setActiveModal] = useState(null); // 'rsvp' | 'timeline'
     const [notification, setNotification] = useState(null); // { message, type: 'success'|'error' }
     const [isGiftExpanded, setIsGiftExpanded] = useState(false);
+    // BUS SHEET: which guest's bus is being edited (null = closed)
+    const [busSheetGuestId, setBusSheetGuestId] = useState(null);
+    const busSheetGuest = guests.find(g => g.id === busSheetGuestId) || null;
 
     // INDEPENDENT BLOCKS STATE
     const [songInputs, setSongInputs] = useState({});
@@ -155,7 +294,15 @@ export default function InvitationPublicPage() {
         setGuests(prev => prev.map(g => {
             if (g.id !== guestId) return g;
             if (field === 'confirmado' && value === false) {
-                return { ...g, confirmado: false, bus: false, alergias: '' };
+                return { ...g, confirmado: false, bus: null, alergias: '' };
+            }
+            if (field === 'busEnabled') {
+                return { ...g, bus: value ? { ida: null, vuelta: null } : null };
+            }
+            if (field === 'busStop') {
+                // value = { dir: 'ida'|'vuelta', stopId }
+                const currentBus = (typeof g.bus === 'object' && g.bus) ? g.bus : { ida: null, vuelta: null };
+                return { ...g, bus: { ...currentBus, [value.dir]: value.stopId } };
             }
             return { ...g, [field]: value };
         }));
@@ -169,7 +316,7 @@ export default function InvitationPublicPage() {
                 const guestRef = doc(db, 'weddings', weddingId, 'guests', g.id);
                 batch.update(guestRef, {
                     confirmado: g.confirmado,
-                    bus: g.bus || false,
+                    bus: g.bus ?? null,
                     alergias: g.alergias || ''
                 });
             });
@@ -547,14 +694,69 @@ export default function InvitationPublicPage() {
                                                 <button onClick={() => updateGuestState(guest.id, 'confirmado', true)} className={`py-3 px-4 rounded-xl border-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${guest.confirmado === true ? 'border-[var(--primary)] bg-[var(--primary)] text-white' : 'border-gray-100 bg-white text-gray-400 hover:border-gray-300'}`}>{guest.confirmado === true && <Check size={14} />} Sí, voy</button>
                                                 <button onClick={() => updateGuestState(guest.id, 'confirmado', false)} className={`py-3 px-4 rounded-xl border-2 text-xs font-bold uppercase tracking-wider transition-all ${guest.confirmado === false ? 'border-gray-200 bg-gray-100 text-gray-500' : 'border-gray-100 bg-white text-gray-400 hover:border-gray-300'}`}>No puedo</button>
                                             </div>
-                                            <div className={`pl-11 transition-all duration-500 overflow-hidden ${guest.confirmado === true ? 'max-h-[500px] opacity-100 mt-4 space-y-4' : 'max-h-0 opacity-0 mt-0 space-y-0'}`}>
-                                                {weddingData?.busConfig?.enabled && (
-                                                    <label className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl cursor-pointer hover:bg-stone-100 transition border border-transparent hover:border-stone-200">
-                                                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${guest.bus ? 'bg-[var(--primary)] border-[var(--primary)]' : 'bg-white border-gray-300'}`}>{guest.bus && <Check size={12} className="text-white" />}</div>
-                                                        <input type="checkbox" checked={guest.bus || false} onChange={(e) => updateGuestState(guest.id, 'bus', e.target.checked)} className="hidden" />
-                                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Necesitaré Autobús</span>
-                                                    </label>
-                                                )}
+                                            <div className={`pl-11 transition-all duration-500 overflow-hidden ${guest.confirmado === true ? 'max-h-[900px] opacity-100 mt-4 space-y-4' : 'max-h-0 opacity-0 mt-0 space-y-0'}`}>
+                                                {weddingData?.busConfig?.enabled && (() => {
+                                                    const bc = weddingData.busConfig;
+                                                    const busEnabled = guest.bus !== null && guest.bus !== false && guest.bus !== undefined;
+                                                    const busObj = (typeof guest.bus === 'object' && guest.bus) ? guest.bus : { ida: null, vuelta: null };
+                                                    const hasIda = bc.ida?.enabled && bc.ida?.stops?.length > 0;
+                                                    const hasVuelta = bc.vuelta?.enabled && bc.vuelta?.stops?.length > 0;
+
+                                                    // Count selected stops for summary
+                                                    const selectedCount = [busObj.ida, busObj.vuelta].filter(Boolean).length;
+                                                    const totalDirs = [hasIda, hasVuelta].filter(Boolean).length;
+
+                                                    return (
+                                                        <div className="space-y-2">
+                                                            {/* Toggle row */}
+                                                            <label className="flex items-center justify-between p-3 bg-stone-50 rounded-xl cursor-pointer hover:bg-stone-100 transition border border-transparent hover:border-stone-200">
+                                                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">🚌 Necesitaré Autobús</span>
+                                                                <div
+                                                                    onClick={() => updateGuestState(guest.id, 'busEnabled', !busEnabled)}
+                                                                    className={`w-10 h-5 rounded-full relative transition-colors cursor-pointer ${busEnabled ? 'bg-[var(--primary)]' : 'bg-gray-200'}`}
+                                                                >
+                                                                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-300 ${busEnabled ? 'left-5' : 'left-0.5'}`} />
+                                                                </div>
+                                                            </label>
+
+                                                            {/* When enabled: compact summary + edit button */}
+                                                            {busEnabled && (hasIda || hasVuelta) && (
+                                                                <button
+                                                                    onClick={() => setBusSheetGuestId(guest.id)}
+                                                                    className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-white rounded-xl border-2 border-[var(--primary)]/20 hover:border-[var(--primary)]/50 transition group"
+                                                                >
+                                                                    <div className="flex items-center gap-3 min-w-0">
+                                                                        <div className="w-8 h-8 rounded-full bg-[var(--primary)]/10 flex items-center justify-center shrink-0">
+                                                                            <Bus size={14} className="text-[var(--primary)]" />
+                                                                        </div>
+                                                                        <div className="text-left min-w-0">
+                                                                            {selectedCount === 0 ? (
+                                                                                <p className="text-xs font-bold text-gray-400">Toca para elegir paradas</p>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">{selectedCount} de {totalDirs} elegidas</p>
+                                                                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                                                                        {hasIda && busObj.ida && (
+                                                                                            <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                                                                                                ↑ {bc.ida.stops.find(s => s.id === busObj.ida)?.time}
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {hasVuelta && busObj.vuelta && (
+                                                                                            <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                                                                                                ↓ {bc.vuelta.stops.find(s => s.id === busObj.vuelta)?.time}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    <ChevronRight size={16} className="text-gray-300 group-hover:text-[var(--primary)] transition shrink-0" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
 
                                                 {weddingData?.invitationConfig?.rsvp?.askAllergies !== false && (
                                                     <div className="animate-fade-in-up" style={{ animationDelay: '100ms' }}>
@@ -600,6 +802,15 @@ export default function InvitationPublicPage() {
                         <span className="text-sm font-bold">{notification.message}</span>
                     </div>
                 </div>
+            )}
+            {/* BUS SELECTION SHEET */}
+            {busSheetGuestId && weddingData?.busConfig && (
+                <BusSheet
+                    guest={busSheetGuest}
+                    busConfig={weddingData.busConfig}
+                    onUpdate={updateGuestState}
+                    onClose={() => setBusSheetGuestId(null)}
+                />
             )}
         </div>
     );
