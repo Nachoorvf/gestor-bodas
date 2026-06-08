@@ -14,3 +14,38 @@ body {
 body {
   @apply bg-boda-bg text-boda-text font-sans;
 }
+
+/* ── CUSTOM WEB APP TRANSITIONS & KEYFRAMES ─────────────────── */
+
+@keyframes slideUpMobile {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInBackdrop {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+  }
+}
+
+.animate-slide-up-mobile {
+  animation: slideUpMobile 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-backdrop-fade {
+  animation: fadeInBackdrop 0.35s ease-out forwards;
+}
+
+/* Micro-animations and custom smooth focus */
+.transition-all-300 {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}

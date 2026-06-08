@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { db } from '../../../../firebase/config';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -216,212 +216,221 @@ export default function InvitationPublicPage() {
             .sort((a, b) => a.order - b.order);
 
         return (
-            <div className="flex flex-col items-center gap-6 mt-12 w-full max-w-lg mx-auto animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-                {allItems.map(item => {
+            <div className="flex flex-col items-center gap-6 mt-12 w-full max-w-lg mx-auto">
+                {allItems.map((item, index) => {
 
                     // --- FIXED MODULES ---
                     if (item.id === 'location') {
                         return (
-                            <a key={item.id} href={item.mapUrl || '#'} target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-4 bg-white/60 backdrop-blur px-6 py-5 rounded-2xl border border-white/50 shadow-sm hover:bg-white transition group">
-                                <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><MapPin size={20} /></div>
-                                <div className="text-left">
-                                    <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Ubicación'}</p>
-                                    <p className="font-serif text-[#333] text-lg">{item.address || "Ver Mapa"}</p>
-                                </div>
-                            </a>
+                            <ScrollReveal key={item.id} delay={index * 80}>
+                                <a href={item.mapUrl || '#'} target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-4 bg-white/60 backdrop-blur px-6 py-5 rounded-2xl border border-white/50 shadow-sm hover:bg-white hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+                                    <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><MapPin size={20} /></div>
+                                    <div className="text-left">
+                                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Ubicación'}</p>
+                                        <p className="font-serif text-[#333] text-lg">{item.address || "Ver Mapa"}</p>
+                                    </div>
+                                </a>
+                            </ScrollReveal>
                         );
                     }
                     if (item.id === 'timeline') {
                         return (
-                            <button key={item.id} onClick={() => setActiveModal('timeline')} className="w-full flex items-center gap-4 bg-white/60 backdrop-blur px-6 py-5 rounded-2xl border border-white/50 shadow-sm hover:bg-white transition group">
-                                <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Calendar size={20} /></div>
-                                <div className="text-left">
-                                    <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Agenda'}</p>
-                                    <p className="font-serif text-[#333] text-lg">Ver Horarios</p>
-                                </div>
-                            </button>
+                            <ScrollReveal key={item.id} delay={index * 80}>
+                                <button onClick={() => setActiveModal('timeline')} className="w-full flex items-center gap-4 bg-white/60 backdrop-blur px-6 py-5 rounded-2xl border border-white/50 shadow-sm hover:bg-white hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+                                    <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Calendar size={20} /></div>
+                                    <div className="text-left">
+                                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Agenda'}</p>
+                                        <p className="font-serif text-[#333] text-lg">Ver Horarios</p>
+                                    </div>
+                                </button>
+                            </ScrollReveal>
                         );
                     }
                     if (item.id === 'bank') {
                         return (
-                            <div key={item.id} className="w-full animate-fade-in-up">
-                                {/* Collapsed trigger — card style matching other modules */}
-                                <button
-                                    onClick={() => setIsGiftExpanded(!isGiftExpanded)}
-                                    className={`w-full flex items-center gap-4 px-6 py-5 rounded-2xl border shadow-sm transition-all duration-300 group
-                                        ${isGiftExpanded
-                                            ? 'bg-[var(--primary)]/5 border-[var(--primary)]/30'
-                                            : 'bg-white/60 backdrop-blur border-white/50 hover:bg-white'}`}
-                                >
-                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-all duration-300
-                                        ${isGiftExpanded ? 'bg-[var(--primary)] text-white' : 'bg-[var(--primary)] text-white group-hover:scale-110'}`}>
-                                        <Gift size={20} />
-                                    </div>
-                                    <div className="text-left flex-1 min-w-0">
-                                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Lista de Bodas'}</p>
-                                        <p className="font-serif text-[#333] text-lg">{isGiftExpanded ? 'Ver detalles' : (item.subtitle || 'Hacernos un regalo')}</p>
-                                    </div>
-                                    <div className={`w-7 h-7 rounded-full border border-gray-200 bg-white flex items-center justify-center transition-transform duration-300 ${isGiftExpanded ? 'rotate-180' : ''}`}>
-                                        <ChevronDown size={14} className="text-gray-400" />
-                                    </div>
-                                </button>
+                            <ScrollReveal key={item.id} delay={index * 80}>
+                                <div className="w-full">
+                                    {/* Collapsed trigger — card style matching other modules */}
+                                    <button
+                                        onClick={() => setIsGiftExpanded(!isGiftExpanded)}
+                                        className={`w-full flex items-center gap-4 px-6 py-5 rounded-2xl border shadow-sm transition-all duration-300 group
+                                            ${isGiftExpanded
+                                                ? 'bg-[var(--primary)]/5 border-[var(--primary)]/30'
+                                                : 'bg-white/60 backdrop-blur border-white/50 hover:bg-white hover:shadow-md hover:-translate-y-0.5'}`}
+                                    >
+                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-all duration-300
+                                            ${isGiftExpanded ? 'bg-[var(--primary)] text-white' : 'bg-[var(--primary)] text-white group-hover:scale-110'}`}>
+                                            <Gift size={20} />
+                                        </div>
+                                        <div className="text-left flex-1 min-w-0">
+                                            <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{item.title || 'Lista de Bodas'}</p>
+                                            <p className="font-serif text-[#333] text-lg">{isGiftExpanded ? 'Ver detalles' : (item.subtitle || 'Hacernos un regalo')}</p>
+                                        </div>
+                                        <div className={`w-7 h-7 rounded-full border border-gray-200 bg-white flex items-center justify-center transition-transform duration-300 ${isGiftExpanded ? 'rotate-180' : ''}`}>
+                                            <ChevronDown size={14} className="text-gray-400" />
+                                        </div>
+                                    </button>
 
-                                {/* Expanded content */}
-                                <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isGiftExpanded ? 'max-h-[400px] opacity-100 mt-2' : 'max-h-0 opacity-0 mt-0'}`}>
-                                    <div className="bg-white/70 backdrop-blur border border-[var(--primary)]/15 rounded-2xl px-6 py-5 space-y-4 shadow-sm">
-                                        {(item.message) && (
-                                            <p className="font-serif text-sm text-[#333] leading-relaxed text-center italic opacity-80">
-                                                &ldquo;{item.message}&rdquo;
-                                            </p>
-                                        )}
-                                        {item.iban && (
-                                            <div
-                                                onClick={() => copyToClipboard(item.iban)}
-                                                className="cursor-pointer group/iban bg-white rounded-2xl p-4 border border-[var(--primary)]/20 hover:border-[var(--primary)]/50 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col items-center gap-2"
-                                            >
-                                                <p className="text-[10px] uppercase tracking-[0.18em] text-gray-400 font-bold">Número de Cuenta</p>
-                                                <div className="flex items-center gap-3">
-                                                    <p className="font-mono text-base text-[#333] font-semibold tracking-wider">{item.iban}</p>
-                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200
-                                                        ${copiedIban ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400 group-hover/iban:bg-[var(--primary)]/10 group-hover/iban:text-[var(--primary)]'}`}>
-                                                        {copiedIban ? <Check size={14} /> : <Copy size={14} />}
-                                                    </div>
-                                                </div>
-                                                <p className="text-[10px] text-gray-400 font-medium">
-                                                    {copiedIban ? '✓ Copiado al portapapeles' : 'Toca para copiar el IBAN'}
+                                    {/* Expanded content */}
+                                    <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isGiftExpanded ? 'max-h-[400px] opacity-100 mt-2' : 'max-h-0 opacity-0 mt-0'}`}>
+                                        <div className="bg-white/70 backdrop-blur border border-[var(--primary)]/15 rounded-2xl px-6 py-5 space-y-4 shadow-sm">
+                                            {(item.message) && (
+                                                <p className="font-serif text-sm text-[#333] leading-relaxed text-center italic opacity-80">
+                                                    &ldquo;{item.message}&rdquo;
                                                 </p>
-                                            </div>
-                                        )}
+                                            )}
+                                            {item.iban && (
+                                                <div
+                                                    onClick={() => copyToClipboard(item.iban)}
+                                                    className="cursor-pointer group/iban bg-white rounded-2xl p-4 border border-[var(--primary)]/20 hover:border-[var(--primary)]/50 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col items-center gap-2"
+                                                >
+                                                    <p className="text-[10px] uppercase tracking-[0.18em] text-gray-400 font-bold">Número de Cuenta</p>
+                                                    <div className="flex items-center gap-3">
+                                                        <p className="font-mono text-base text-[#333] font-semibold tracking-wider">{item.iban}</p>
+                                                        <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200
+                                                            ${copiedIban ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400 group-hover/iban:bg-[var(--primary)]/10 group-hover/iban:text-[var(--primary)]'}`}>
+                                                            {copiedIban ? <Check size={14} /> : <Copy size={14} />}
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-[10px] text-gray-400 font-medium">
+                                                        {copiedIban ? '✓ Copiado al portapapeles' : 'Toca para copiar el IBAN'}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            </ScrollReveal>
                         );
                     }
                     // RSVP button in-order
                     if (item.id === 'rsvp') {
                         return (
-                            <button
-                                key="rsvp"
-                                onClick={() => setActiveModal('rsvp')}
-                                className="group relative w-full max-w-sm bg-[var(--primary)] text-white px-10 py-5 rounded-full font-bold uppercase tracking-[0.2em] text-sm hover:opacity-90 transition-all shadow-2xl hover:shadow-xl hover:-translate-y-1 overflow-hidden"
-                            >
-                                <span className="relative z-10 flex items-center justify-center gap-2">
-                                    Confirmar Asistencia <ChevronDown size={16} className="animate-bounce" />
-                                </span>
-                                <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                            </button>
+                            <ScrollReveal key={item.id} delay={index * 80}>
+                                <button
+                                    onClick={() => setActiveModal('rsvp')}
+                                    className="group relative w-full max-w-sm bg-[var(--primary)] text-white px-10 py-5 rounded-full font-bold uppercase tracking-[0.2em] text-sm hover:opacity-95 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 overflow-hidden"
+                                >
+                                    <span className="relative z-10 flex items-center justify-center gap-2">
+                                        Confirmar Asistencia <ChevronDown size={16} className="animate-bounce" />
+                                    </span>
+                                    <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                                </button>
+                            </ScrollReveal>
                         );
                     }
 
                     // --- CUSTOM BLOCKS ---
                     if (item.isCustom) {
                         return (
-                            <div key={item.id} className="w-full animate-fade-in-up">
-                                {item.type === 'text' && (
-                                    <div className="text-center space-y-4 py-4">
-                                        {item.title && <h3 className="font-display text-3xl text-[#333]">{item.title}</h3>}
-                                        <p className="font-serif text-gray-600 leading-relaxed whitespace-pre-wrap">{item.content}</p>
-                                    </div>
-                                )}
-                                {item.type === 'image' && (
-                                    <div className="rounded-2xl overflow-hidden shadow-lg border-4 border-white transform rotate-1 hover:rotate-0 transition duration-500">
-                                        {item.content ? (
-                                            <img src={item.content} alt={item.title} loading="lazy" className="w-full h-auto object-cover" />
-                                        ) : (
-                                            <div className="w-full aspect-video bg-gray-100 flex flex-col items-center justify-center text-gray-400">
-                                                <ImageIcon size={48} className="mb-2 opacity-50" />
-                                            </div>
-                                        )}
-                                        {item.title && <p className="bg-white text-center py-2 font-display text-xl text-[#333]">{item.title}</p>}
-                                    </div>
-                                )}
-                                {item.type === 'video' && (
-                                    <div className="rounded-2xl overflow-hidden shadow-lg border-4 border-white aspect-video bg-black">
-                                        <iframe src={item.content} className="w-full h-full" allowFullScreen title={item.title} />
-                                    </div>
-                                )}
-
-                                {item.type === 'countdown' && (
-                                    <CountdownBlock targetDate={item.content} title={item.title} />
-                                )}
-
-                                {item.type === 'gallery' && (
-                                    <GalleryBlock images={item.content} title={item.title} />
-                                )}
-
-                                {item.type === 'song' && (
-                                    <div className="bg-white/60 backdrop-blur rounded-2xl p-6 border border-white/50 shadow-sm space-y-4">
-                                        <div className="flex items-center gap-3 justify-center mb-2">
-                                            <Music className="text-[var(--primary)]" size={24} />
-                                            <h3 className="font-display text-2xl text-[#333]">{item.title || 'Sugerir Canción'}</h3>
+                            <ScrollReveal key={item.id} delay={index * 80}>
+                                <div className="w-full">
+                                    {item.type === 'text' && (
+                                        <div className="text-center space-y-4 py-4">
+                                            {item.title && <h3 className="font-display text-3xl text-[#333]">{item.title}</h3>}
+                                            <p className="font-serif text-gray-600 leading-relaxed whitespace-pre-wrap">{item.content}</p>
                                         </div>
-                                        {guests.length > 1 && (
-                                            <div className="relative">
-                                                <select
-                                                    value={selectedGuestForSong}
-                                                    onChange={(e) => setSelectedGuestForSong(e.target.value)}
-                                                    className="w-full bg-white/50 border border-white/80 text-[#333] text-sm rounded-xl px-4 py-3 appearance-none outline-none focus:border-[var(--primary)] transition shadow-inner font-serif"
+                                    )}
+                                    {item.type === 'image' && (
+                                        <div className="rounded-2xl overflow-hidden shadow-lg border-4 border-white transform rotate-1 hover:rotate-0 transition duration-500">
+                                            {item.content ? (
+                                                <img src={item.content} alt={item.title} loading="lazy" className="w-full h-auto object-cover" />
+                                            ) : (
+                                                <div className="w-full aspect-video bg-gray-100 flex flex-col items-center justify-center text-gray-400">
+                                                    <ImageIcon size={48} className="mb-2 opacity-50" />
+                                                </div>
+                                            )}
+                                            {item.title && <p className="bg-white text-center py-2 font-display text-xl text-[#333]">{item.title}</p>}
+                                        </div>
+                                    )}
+                                    {item.type === 'video' && (
+                                        <div className="rounded-2xl overflow-hidden shadow-lg border-4 border-white aspect-video bg-black">
+                                            <iframe src={item.content} className="w-full h-full" allowFullScreen title={item.title} />
+                                        </div>
+                                    )}
+
+                                    {item.type === 'countdown' && (
+                                        <CountdownBlock targetDate={item.content} title={item.title} />
+                                    )}
+
+                                    {item.type === 'gallery' && (
+                                        <GalleryBlock images={item.content} title={item.title} />
+                                    )}
+
+                                    {item.type === 'song' && (
+                                        <div className="bg-white/60 backdrop-blur rounded-2xl p-6 border border-white/50 shadow-sm space-y-4">
+                                            <div className="flex items-center gap-3 justify-center mb-2">
+                                                <Music className="text-[var(--primary)]" size={24} />
+                                                <h3 className="font-display text-2xl text-[#333]">{item.title || 'Sugerir Canción'}</h3>
+                                            </div>
+                                            {guests.length > 1 && (
+                                                <div className="relative">
+                                                    <select
+                                                        value={selectedGuestForSong}
+                                                        onChange={(e) => setSelectedGuestForSong(e.target.value)}
+                                                        className="w-full bg-white/50 border border-white/80 text-[#333] text-sm rounded-xl px-4 py-3 appearance-none outline-none focus:border-[var(--primary)] transition shadow-inner font-serif"
+                                                    >
+                                                        {guests.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                                                    </select>
+                                                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                                </div>
+                                            )}
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Ej: Danza Kuduro - Don Omar"
+                                                    value={songInputs[item.id] || ''}
+                                                    onChange={(e) => setSongInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                                    className="flex-1 bg-white border border-white/80 rounded-xl px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition shadow-inner"
+                                                />
+                                                <button
+                                                    onClick={() => handleSaveSongBlock(item.id)}
+                                                    disabled={!songInputs[item.id] || submittingSong}
+                                                    className="bg-[#333] text-white px-4 rounded-xl hover:bg-black transition flex items-center justify-center disabled:opacity-50"
                                                 >
-                                                    {guests.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-                                                </select>
-                                                <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                                    {submittingSong ? <div className="w-5 h-5 border-2 border-white rounded-full border-t-transparent animate-spin" /> : <Send size={18} />}
+                                                </button>
                                             </div>
-                                        )}
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                placeholder="Ej: Danza Kuduro - Don Omar"
-                                                value={songInputs[item.id] || ''}
-                                                onChange={(e) => setSongInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                                className="flex-1 bg-white border border-white/80 rounded-xl px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition shadow-inner"
-                                            />
-                                            <button
-                                                onClick={() => handleSaveSongBlock(item.id)}
-                                                disabled={!songInputs[item.id] || submittingSong}
-                                                className="bg-[#333] text-white px-4 rounded-xl hover:bg-black transition flex items-center justify-center disabled:opacity-50"
-                                            >
-                                                {submittingSong ? <div className="w-5 h-5 border-2 border-white rounded-full border-t-transparent animate-spin" /> : <Send size={18} />}
-                                            </button>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {item.type === 'message' && (
-                                    <div className="bg-white/60 backdrop-blur rounded-2xl p-6 border border-white/50 shadow-sm space-y-4">
-                                        <div className="flex items-center gap-3 justify-center mb-2">
-                                            <MessageSquare className="text-[var(--primary)]" size={24} />
-                                            <h3 className="font-display text-2xl text-[#333]">{item.title || 'Libro de Firmas'}</h3>
-                                        </div>
-                                        {guests.length > 1 && (
-                                            <div className="relative">
-                                                <select
-                                                    value={selectedGuestForMessage}
-                                                    onChange={(e) => setSelectedGuestForMessage(e.target.value)}
-                                                    className="w-full bg-white/50 border border-white/80 text-[#333] text-sm rounded-xl px-4 py-3 appearance-none outline-none focus:border-[var(--primary)] transition shadow-inner font-serif"
-                                                >
-                                                    {guests.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-                                                </select>
-                                                <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                    {item.type === 'message' && (
+                                        <div className="bg-white/60 backdrop-blur rounded-2xl p-6 border border-white/50 shadow-sm space-y-4">
+                                            <div className="flex items-center gap-3 justify-center mb-2">
+                                                <MessageSquare className="text-[var(--primary)]" size={24} />
+                                                <h3 className="font-display text-2xl text-[#333]">{item.title || 'Libro de Firmas'}</h3>
                                             </div>
-                                        )}
-                                        <div className="space-y-3">
-                                            <textarea
-                                                placeholder="Dejad aquí vuestros mejores deseos..."
-                                                value={messageInputs[item.id] || ''}
-                                                onChange={(e) => setMessageInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                                className="w-full bg-white border border-white/80 rounded-xl px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition shadow-inner resize-none h-24"
-                                            />
-                                            <button
-                                                onClick={() => handleSaveMessageBlock(item.id)}
-                                                disabled={!messageInputs[item.id] || submittingMessage}
-                                                className="w-full bg-[#333] text-white py-3 rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-black transition flex items-center justify-center gap-2 disabled:opacity-50"
-                                            >
-                                                {submittingMessage ? 'Enviando...' : <>Dejar Mensaje <Send size={14} /></>}
-                                            </button>
+                                            {guests.length > 1 && (
+                                                <div className="relative">
+                                                    <select
+                                                        value={selectedGuestForMessage}
+                                                        onChange={(e) => setSelectedGuestForMessage(e.target.value)}
+                                                        className="w-full bg-white/50 border border-white/80 text-[#333] text-sm rounded-xl px-4 py-3 appearance-none outline-none focus:border-[var(--primary)] transition shadow-inner font-serif"
+                                                    >
+                                                        {guests.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                                                    </select>
+                                                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                                </div>
+                                            )}
+                                            <div className="space-y-3">
+                                                <textarea
+                                                    placeholder="Dejad aquí vuestros mejores deseos..."
+                                                    value={messageInputs[item.id] || ''}
+                                                    onChange={(e) => setMessageInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                                    className="w-full bg-white border border-white/80 rounded-xl px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition shadow-inner resize-none h-24"
+                                                />
+                                                <button
+                                                    onClick={() => handleSaveMessageBlock(item.id)}
+                                                    disabled={!messageInputs[item.id] || submittingMessage}
+                                                    className="w-full bg-[#333] text-white py-3 rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-black transition flex items-center justify-center gap-2 disabled:opacity-50"
+                                                >
+                                                    {submittingMessage ? 'Enviando...' : <>Dejar Mensaje <Send size={14} /></>}
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                </div>
+                            </ScrollReveal>
                         );
                     }
                     return null;
@@ -509,7 +518,7 @@ export default function InvitationPublicPage() {
             {/* SHARED MODAL OVERLAY */}
             {activeModal && (
                 <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={() => setActiveModal(null)}></div>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-backdrop-fade" onClick={() => setActiveModal(null)}></div>
 
                     <div className="bg-white w-full md:max-w-2xl h-[85vh] md:h-auto md:max-h-[90vh] rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl relative flex flex-col animate-slide-up-mobile md:animate-fade-in-up">
 
@@ -709,6 +718,48 @@ function GalleryBlock({ images, title }) {
                 ))}
             </div>
             <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest opacity-60">Desliza para ver más</p>
+        </div>
+    );
+}
+
+function ScrollReveal({ children, delay = 0 }) {
+    const [isVisible, setIsVisible] = useState(false);
+    const ref = useRef(null);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setIsVisible(true);
+                    observer.unobserve(entry.target);
+                }
+            },
+            {
+                threshold: 0.05,
+                rootMargin: '0px 0px -50px 0px'
+            }
+        );
+
+        if (ref.current) {
+            observer.observe(ref.current);
+        }
+
+        return () => {
+            if (ref.current) {
+                observer.unobserve(ref.current);
+            }
+        };
+    }, []);
+
+    return (
+        <div
+            ref={ref}
+            className={`w-full transition-all duration-700 ease-out transform ${
+                isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-[0.98]'
+            }`}
+            style={{ transitionDelay: `${delay}ms` }}
+        >
+            {children}
         </div>
     );
 }
