@@ -4,7 +4,7 @@ import { auth, db } from '../../firebase/config';
 import { collection, query, onSnapshot, orderBy, doc, updateDoc, addDoc, where, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { deleteWedding } from '../actions';
+import { deleteWedding, deleteUserAccount } from '../actions';
 import { useAuth } from '../../context/AuthContext';
 import {
   Users, Gem, Calendar, Search, Plus,
@@ -153,16 +153,14 @@ export default function AdminDashboard() {
     if (!confirm(`¿Borrar usuario ${targetUser.email} y TODOS sus datos?`)) return;
     setActionLoading(true);
     try {
-      const batch = writeBatch(db);
-      if (targetUser.weddingId) {
-        // Delete subcollections manually (client-side specific logic for now if server action doesn't cover it)
-        // Ideally this should be a cloud function or server action too.
-        // For simplicity reusing logic:
-        batch.delete(doc(db, 'weddings', targetUser.weddingId));
+      const token = await user.getIdToken();
+      const result = await deleteUserAccount(token, targetUser.id);
+      
+      if (result.success) {
+        alert("✅ " + result.message);
+      } else {
+        throw new Error(result.message);
       }
-      batch.delete(doc(db, 'users', targetUser.id));
-      await batch.commit();
-      alert("✅ Usuario eliminado");
     } catch (e) { alert("Error: " + e.message); }
     finally { setActionLoading(false); }
   };
