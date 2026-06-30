@@ -657,10 +657,28 @@ export default function MesasPage() {
                     </div>
 
                     {/* Zoom Controls */}
-                    <div className="absolute top-4 right-4 z-30 flex gap-2 bg-white p-1.5 rounded-xl shadow-lg border border-gray-100">
-                        <button onClick={() => setZoom(z => Math.max(0.4, z - 0.1))} className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 font-bold text-gray-500 text-xl md:text-base">-</button>
-                        <span className="flex items-center text-xs font-bold text-gray-400 w-8 justify-center">{Math.round(zoom * 100)}%</span>
-                        <button onClick={() => setZoom(z => Math.min(1.5, z + 0.1))} className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 font-bold text-gray-500 text-xl md:text-base">+</button>
+                    <div className="absolute top-4 right-4 z-30 flex flex-col gap-2 items-end">
+                        <div className="flex gap-2 bg-white p-1.5 rounded-xl shadow-lg border border-gray-100">
+                            <button onClick={() => setZoom(z => Math.max(0.4, z - 0.1))} className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 font-bold text-gray-500 text-xl md:text-base">-</button>
+                            <span className="flex items-center text-xs font-bold text-gray-400 w-8 justify-center">{Math.round(zoom * 100)}%</span>
+                            <button onClick={() => setZoom(z => Math.min(1.5, z + 0.1))} className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 font-bold text-gray-500 text-xl md:text-base">+</button>
+                        </div>
+                        {/* Color Legend */}
+                        <div className="bg-white/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-gray-100 flex flex-col gap-1.5">
+                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Leyenda</span>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-blue-500 shrink-0" />
+                                <span className="text-[10px] text-gray-500 font-medium">Confirmado</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-red-500 shrink-0" />
+                                <span className="text-[10px] text-gray-500 font-medium">No viene</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-gray-400 shrink-0" />
+                                <span className="text-[10px] text-gray-500 font-medium">Sin respuesta</span>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Canvas Area */}

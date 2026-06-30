@@ -111,19 +111,27 @@ export default function VisualTable({ table, guests = [], isDragging, isSelected
                     const guest = guests.find(g => g.seatIndex === i); // Match guest by specific seat index
                     const pos = getChairPosition(i, seats);
 
+                    // Determine chair color based on RSVP status
+                    const chairStyle = guest
+                        ? guest.confirmado === true
+                            ? 'bg-blue-500 text-white border-blue-500 scale-110 z-20'       // Confirmed → blue
+                            : guest.confirmado === false
+                                ? 'bg-red-500 text-white border-red-500 scale-110 z-20'     // Declined → red
+                                : 'bg-gray-400 text-white border-gray-400 scale-110 z-20'   // No response → gray
+                        : 'bg-white border-gray-200 text-gray-200 scale-90 z-10';            // Empty seat
+
+                    const chairTitle = guest
+                        ? `Silla ${i + 1}: ${guest.nombre} — ${guest.confirmado === true ? '✅ Confirmado' : guest.confirmado === false ? '❌ No viene' : '⏳ Sin respuesta'}`
+                        : `Silla ${i + 1}: Vacía`;
+
                     return (
                         <div
                             key={i}
-                            className={`absolute w-10 h-10 rounded-full shadow-sm flex items-center justify-center transition-all border
-                    ${guest
-                                    ? 'bg-boda-green text-white border-boda-green scale-110 z-20'
-                                    : 'bg-white border-gray-200 text-gray-200 scale-90 z-10'
-                                }
-                `}
+                            className={`absolute w-10 h-10 rounded-full shadow-sm flex items-center justify-center transition-all border ${chairStyle}`}
                             style={{
                                 transform: `translate(${pos.x}px, ${pos.y}px)`,
                             }}
-                            title={guest ? `Silla ${i + 1}: ${guest.nombre}` : `Silla ${i + 1}: Vacía`}
+                            title={chairTitle}
                         >
                             {guest ? (
                                 <span className="text-xs font-bold leading-none">{guest.nombre.substring(0, 2).toUpperCase()}</span>
