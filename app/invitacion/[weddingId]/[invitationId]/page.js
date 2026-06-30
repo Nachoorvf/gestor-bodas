@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { db } from '../../../../firebase/config';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { useParams, useSearchParams } from 'next/navigation';
-import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy, Clock, Image as ImageIcon, Music, MessageSquare, Send, Bus, ArrowRight, ArrowLeft, X, ChevronRight } from 'lucide-react';
+import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy, Clock, Image as ImageIcon, Music, MessageSquare, Send, Bus, ArrowRight, ArrowLeft, X, ChevronRight, Lock } from 'lucide-react';
 
 // ─── BUS SELECTION SHEET ─────────────────────────────────────────────────────
 function BusSheet({ guest, busConfig, onUpdate, onClose }) {
@@ -682,9 +682,27 @@ export default function InvitationPublicPage() {
                         <div className="flex-1 overflow-y-auto p-6 md:p-8">
 
                             {/* RSVP CONTENT */}
-                            {activeModal === 'rsvp' && (
-                                <div className="space-y-6">
-                                    {guests.map((guest, idx) => (
+                            {activeModal === 'rsvp' && (() => {
+                                const rsvpDeadline = weddingData?.invitationConfig?.rsvp?.deadline;
+                                const isDeadlinePassed = rsvpDeadline && new Date() > new Date(rsvpDeadline);
+
+                                if (isDeadlinePassed) {
+                                    return (
+                                        <div className="text-center py-12 space-y-4">
+                                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto text-gray-400">
+                                                <Lock size={24} />
+                                            </div>
+                                            <h4 className="font-serif text-2xl text-[#333]">Plazo finalizado</h4>
+                                            <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
+                                                Ya no se permiten cambios en la confirmación de asistencia. Si necesitas modificar algo, por favor contacta directamente con los novios.
+                                            </p>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="space-y-6">
+                                        {guests.map((guest, idx) => (
                                         <div key={guest.id} className="flex flex-col gap-3 py-2 border-b border-gray-50 last:border-0">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-serif italic text-gray-400 text-sm">{idx + 1}</div>
@@ -771,7 +789,8 @@ export default function InvitationPublicPage() {
                                         <button onClick={handleSaveAll} disabled={saving} className="w-full bg-[var(--primary)] text-white py-4 rounded-xl font-bold uppercase tracking-[0.2em] text-sm hover:opacity-90 transition-all shadow-lg active:scale-[0.98]">{saving ? 'Guardando...' : 'Enviar Respuesta'}</button>
                                     </div>
                                 </div>
-                            )}
+                                );
+                            })()}
 
                             {/* TIMELINE CONTENT */}
                             {activeModal === 'timeline' && (

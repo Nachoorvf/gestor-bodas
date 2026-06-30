@@ -9,7 +9,7 @@ import {
     MapPin, Calendar, Gift, Type, Image as ImageIcon, Video,
     Clock, Images, Trash2, Plus, ChevronUp, ChevronDown,
     Palette, Smartphone, AlignLeft, Eye, X, Check, Music, MessageSquare,
-    ChevronRight, Sparkles, LayoutTemplate, CheckCircle2, Upload
+    ChevronRight, Sparkles, LayoutTemplate, CheckCircle2, Upload, Settings
 } from 'lucide-react';
 
 // ─── TOAST ────────────────────────────────────────────────────────────────────
@@ -376,6 +376,12 @@ export default function InvitationConfigPage() {
                             onClick={() => setActiveTab('content')}
                             icon={<LayoutTemplate size={13} />}
                             label="Contenido"
+                        />
+                        <TabBtn
+                            active={activeTab === 'settings'}
+                            onClick={() => setActiveTab('settings')}
+                            icon={<Settings size={13} />}
+                            label="Config."
                         />
                     </div>
                 </div>
@@ -907,6 +913,33 @@ export default function InvitationConfigPage() {
                                         <AddBlockButton icon={<MessageSquare size={14} />} label="Mensajes" onClick={() => addBlock('message')}
                                             color="text-teal-600 bg-teal-50 hover:bg-teal-100 border-teal-100" />
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── TAB: SETTINGS ──────────────────────────────────── */}
+                    {activeTab === 'settings' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="space-y-4">
+                                <SectionLabel>Configuración de Asistencia</SectionLabel>
+                                <div className="bg-gray-50 rounded-2xl p-4 space-y-5 border border-gray-100">
+                                    <FieldGroup label="Fecha Límite de Confirmación">
+                                        <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">A partir de esta fecha, los invitados no podrán confirmar ni cambiar su asistencia, y verán un mensaje indicando que el plazo ha finalizado.</p>
+                                        <StyledInput
+                                            type="datetime-local"
+                                            value={config.rsvp?.deadline || ''}
+                                            onChange={e => updateModule('rsvp', 'deadline', e.target.value)}
+                                        />
+                                        {config.rsvp?.deadline && (
+                                            <button
+                                                onClick={() => updateModule('rsvp', 'deadline', '')}
+                                                className="text-[10px] text-red-500 font-bold uppercase tracking-wider hover:underline mt-2 flex items-center gap-1"
+                                            >
+                                                <Trash2 size={12} /> Eliminar fecha límite
+                                            </button>
+                                        )}
+                                    </FieldGroup>
                                 </div>
                             </div>
                         </div>
