@@ -665,7 +665,63 @@ export default function MesasPage() {
                         </div>
                     )}
 
-                    {/* ── BOTTOM CONTROL BAR ── zoom + layout toggle + legend, mobile-friendly */}
+                    {/* Rotation Toolbar — appears on the right when editing AND a table is selected */}
+                    {isLayoutMode && selectedTableId && selectedTable && (
+                        <div className="absolute top-4 right-4 z-30 flex flex-col gap-2 animate-fade-in">
+                            <div className="bg-white p-2 rounded-2xl shadow-lg border border-gray-100 flex flex-col gap-1">
+                                {/* Rotate left */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateTable(selectedTable.id, { rotation: ((selectedTable.rotation || 0) - 45 + 360) % 360 });
+                                    }}
+                                    className="w-10 h-10 rounded-xl hover:bg-gray-50 flex items-center justify-center text-gray-600 hover:text-boda-text transition group relative"
+                                    title="Girar −45°"
+                                >
+                                    <span className="text-lg leading-none">↺</span>
+                                    <span className="absolute right-full mr-2 bg-boda-text text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-50">
+                                        −45°
+                                    </span>
+                                </button>
+
+                                {/* Current angle indicator */}
+                                <div className="w-10 h-6 flex items-center justify-center">
+                                    <span className="text-[9px] font-bold text-gray-400 tabular-nums">{selectedTable.rotation || 0}°</span>
+                                </div>
+
+                                {/* Rotate right */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateTable(selectedTable.id, { rotation: ((selectedTable.rotation || 0) + 45) % 360 });
+                                    }}
+                                    className="w-10 h-10 rounded-xl hover:bg-gray-50 flex items-center justify-center text-gray-600 hover:text-boda-text transition group relative"
+                                    title="Girar +45°"
+                                >
+                                    <span className="text-lg leading-none">↻</span>
+                                    <span className="absolute right-full mr-2 bg-boda-text text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-50">
+                                        +45°
+                                    </span>
+                                </button>
+
+                                {/* Reset */}
+                                {(selectedTable.rotation || 0) !== 0 && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            updateTable(selectedTable.id, { rotation: 0 });
+                                        }}
+                                        className="w-10 h-10 rounded-xl hover:bg-red-50 flex items-center justify-center text-gray-300 hover:text-red-400 transition"
+                                        title="Restablecer rotación"
+                                    >
+                                        <span className="text-[10px] font-bold">↕</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+
                     <div className="absolute bottom-20 md:bottom-4 left-4 right-4 z-30 flex items-center justify-between gap-3 pointer-events-none">
 
                         {/* LEFT: Layout mode toggle */}
