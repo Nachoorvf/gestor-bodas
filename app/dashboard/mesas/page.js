@@ -154,6 +154,11 @@ export default function MesasPage() {
 
     const unassignedGuests = allGuests.filter(g => !g.tableId && g.confirmado !== false).filter(g => g.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
 
+    // Guests already assigned to a table (only shown when searching)
+    const assignedMatchingGuests = searchTerm.trim()
+        ? allGuests.filter(g => g.tableId && g.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
+        : [];
+
     // HELPER: Group Guests
     const getGroupedGuests = () => {
         if (groupingMode === 'all') return {};
@@ -191,7 +196,7 @@ export default function MesasPage() {
             createdAt: new Date().toISOString()
         });
         setSelectedTableId(docRef.id);
-        setActiveTab('inspector');
+        if (window.innerWidth < 768) setActiveTab('inspector');
     };
 
     const updateTable = async (id, data) => {
@@ -402,8 +407,8 @@ export default function MesasPage() {
 
             setSelectedTableId(tableId);
 
-            // Prevent auto-opening the editor while arranging layout to avoid disruption
-            if (!isLayoutMode) {
+            // Only switch tab on mobile — on desktop all 3 panels are always visible
+            if (!isLayoutMode && window.innerWidth < 768) {
                 setActiveTab('inspector');
             }
         }
@@ -441,7 +446,7 @@ export default function MesasPage() {
 
                 {/* 1. LEFT SIDEBAR: GUESTS */}
                 <div className={`
-                    ${activeTab === 'guests' ? 'flex absolute inset-0 bg-white z-40' : 'hidden md:flex'}
+                    ${activeTab === 'guests' ? 'flex absolute inset-0 bg-white z-40 md:relative md:inset-auto md:z-auto' : 'hidden md:flex'}
                     w-full md:w-80 bg-white rounded-3xl shadow-sm border border-gray-100 flex-col overflow-hidden shrink-0 animate-slide-in-left
                 `}>
                     <div className="p-5 border-b border-gray-100 flex flex-col gap-4">
@@ -484,6 +489,35 @@ export default function MesasPage() {
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-2 mb-2">
                             Sin Asignar ({unassignedGuests.length})
                         </p>
+
+                        {/* ASSIGNED GUESTS MATCHING SEARCH */}
+                        {assignedMatchingGuests.length > 0 && (
+                            <div className="mb-4">
+                                <p className="text-xs font-bold text-blue-400 uppercase tracking-widest px-2 mb-2">
+                                    Ya asignados ({assignedMatchingGuests.length})
+                                </p>
+                                {assignedMatchingGuests.map(guest => {
+                                    const tableOfGuest = tables.find(t => t.id === guest.tableId);
+                                    return (
+                                        <div
+                                            key={guest.id}
+                                            className="p-3 rounded-xl border border-blue-100 bg-blue-50 flex items-center justify-between mb-1"
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <span className="font-medium text-sm text-blue-800 truncate block">{guest.nombre}</span>
+                                                <span className="text-[10px] text-blue-400 font-medium">{tableOfGuest ? `📍 ${tableOfGuest.name}` : 'Mesa desconocida'}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => unassignGuest(guest.id)}
+                                                className="ml-2 text-blue-300 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition"
+                                                title="Quitar de mesa"
+                                            >✕</button>
+                                        </div>
+                                    );
+                                })}
+                                <div className="border-t border-gray-100 mt-3 mb-2" />
+                            </div>
+                        )}
 
                         {/* RENDER LOGIC BASED ON MODE */}
                         {groupingMode === 'all' ? (
@@ -631,36 +665,116 @@ export default function MesasPage() {
                         </div>
                     )}
 
-                    {/* LAYOUT MODE TOGGLE (Floating Bottom Center) */}
-                    {/* Adjusted bottom position for mobile to avoid tab bar */}
-                    <div className="absolute bottom-28 md:bottom-8 left-1/2 -translate-x-1/2 z-30 w-full flex justify-center pointer-events-none">
+                    {/* Rotation Toolbar — appears on the right when editing AND a table is selected */}
+                    {isLayoutMode && selectedTableId && selectedTable && (
+                        <div className="absolute top-4 right-4 z-30 flex flex-col gap-2 animate-fade-in">
+                            <div className="bg-white p-2 rounded-2xl shadow-lg border border-gray-100 flex flex-col gap-1">
+                                {/* Rotate left */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateTable(selectedTable.id, { rotation: ((selectedTable.rotation || 0) - 45 + 360) % 360 });
+                                    }}
+                                    className="w-10 h-10 rounded-xl hover:bg-gray-50 flex items-center justify-center text-gray-600 hover:text-boda-text transition group relative"
+                                    title="Girar −45°"
+                                >
+                                    <span className="text-lg leading-none">↺</span>
+                                    <span className="absolute right-full mr-2 bg-boda-text text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-50">
+                                        −45°
+                                    </span>
+                                </button>
+
+                                {/* Current angle indicator */}
+                                <div className="w-10 h-6 flex items-center justify-center">
+                                    <span className="text-[9px] font-bold text-gray-400 tabular-nums">{selectedTable.rotation || 0}°</span>
+                                </div>
+
+                                {/* Rotate right */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateTable(selectedTable.id, { rotation: ((selectedTable.rotation || 0) + 45) % 360 });
+                                    }}
+                                    className="w-10 h-10 rounded-xl hover:bg-gray-50 flex items-center justify-center text-gray-600 hover:text-boda-text transition group relative"
+                                    title="Girar +45°"
+                                >
+                                    <span className="text-lg leading-none">↻</span>
+                                    <span className="absolute right-full mr-2 bg-boda-text text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-50">
+                                        +45°
+                                    </span>
+                                </button>
+
+                                {/* Reset */}
+                                {(selectedTable.rotation || 0) !== 0 && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            updateTable(selectedTable.id, { rotation: 0 });
+                                        }}
+                                        className="w-10 h-10 rounded-xl hover:bg-red-50 flex items-center justify-center text-gray-300 hover:text-red-400 transition"
+                                        title="Restablecer rotación"
+                                    >
+                                        <span className="text-[10px] font-bold">↕</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+
+                    <div className="absolute bottom-20 md:bottom-4 left-4 right-4 z-30 flex items-center justify-between gap-3 pointer-events-none">
+
+                        {/* LEFT: Layout mode toggle */}
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setIsLayoutMode(!isLayoutMode);
-                                setSelectedTableId(null); // Deselect when switching modes
+                                setSelectedTableId(null);
                             }}
                             className={`
-                            pointer-events-auto flex items-center gap-2 px-6 py-3 rounded-full shadow-xl font-bold text-sm transition-all transform hover:scale-105 select-none
-                            ${isLayoutMode
+                                pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-lg font-bold text-sm transition-all select-none shrink-0
+                                ${isLayoutMode
                                     ? 'bg-boda-text text-white ring-4 ring-boda-text/20'
-                                    : 'bg-white text-gray-600 hover:text-boda-text border border-gray-100'
+                                    : 'bg-white text-gray-600 border border-gray-100 hover:border-gray-300'
                                 }
-                        `}
+                            `}
                         >
                             {isLayoutMode ? (
-                                <><span>✅</span> <span>Guardar Distribución</span></>
+                                <><span>✅</span> <span className="hidden sm:inline">Guardar</span></>
                             ) : (
-                                <><span>✏️</span> <span>Editar Distribución</span></>
+                                <><span>✏️</span> <span className="hidden sm:inline">Editar</span></>
                             )}
                         </button>
-                    </div>
 
-                    {/* Zoom Controls */}
-                    <div className="absolute top-4 right-4 z-30 flex gap-2 bg-white p-1.5 rounded-xl shadow-lg border border-gray-100">
-                        <button onClick={() => setZoom(z => Math.max(0.4, z - 0.1))} className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 font-bold text-gray-500 text-xl md:text-base">-</button>
-                        <span className="flex items-center text-xs font-bold text-gray-400 w-8 justify-center">{Math.round(zoom * 100)}%</span>
-                        <button onClick={() => setZoom(z => Math.min(1.5, z + 0.1))} className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 font-bold text-gray-500 text-xl md:text-base">+</button>
+                        {/* CENTER: Zoom controls */}
+                        <div className="pointer-events-auto flex items-center gap-1 bg-white/90 backdrop-blur-sm px-2 py-1.5 rounded-2xl shadow-lg border border-gray-100">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setZoom(z => Math.max(0.4, z - 0.1)); }}
+                                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-gray-100 font-bold text-gray-500 text-xl active:scale-95 transition"
+                            >−</button>
+                            <span className="text-xs font-bold text-gray-400 w-10 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setZoom(z => Math.min(1.5, z + 0.1)); }}
+                                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-gray-100 font-bold text-gray-500 text-xl active:scale-95 transition"
+                            >+</button>
+                        </div>
+
+                        {/* RIGHT: Legend pill */}
+                        <div className="pointer-events-auto flex items-center gap-2.5 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-100 shrink-0">
+                            <div className="flex items-center gap-1.5" title="Confirmado">
+                                <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                                <span className="text-[9px] font-bold text-gray-400 hidden sm:inline">Confirmado</span>
+                            </div>
+                            <div className="flex items-center gap-1.5" title="No viene">
+                                <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                                <span className="text-[9px] font-bold text-gray-400 hidden sm:inline">No viene</span>
+                            </div>
+                            <div className="flex items-center gap-1.5" title="Sin respuesta">
+                                <div className="w-2.5 h-2.5 rounded-full bg-gray-400" />
+                                <span className="text-[9px] font-bold text-gray-400 hidden sm:inline">Pendiente</span>
+                            </div>
+                        </div>
+
                     </div>
 
                     {/* Canvas Area */}
@@ -804,7 +918,7 @@ export default function MesasPage() {
 
                 {/* 3. RIGHT SIDEBAR: INSPECTOR (Contextual) */}
                 <div className={`
-                ${activeTab === 'inspector' ? 'flex absolute inset-0 bg-white z-40' : 'hidden md:flex'}
+                ${activeTab === 'inspector' ? 'flex absolute inset-0 bg-white z-40 md:relative md:inset-auto md:z-auto' : 'hidden md:flex'}
                 w-full md:w-80 bg-white rounded-3xl shadow-sm border border-gray-100 flex-col overflow-hidden shrink-0 animate-slide-in-right
             `}>
                     {selectedTable ? (
@@ -854,13 +968,34 @@ export default function MesasPage() {
                                             className="w-full bg-gray-50 rounded-xl px-3 py-2 text-sm font-medium outline-none border border-gray-100"
                                             value={selectedTable.seats}
                                             min="1" max="30"
-                                            onChange={(e) => {
+                                            onChange={async (e) => {
                                                 let val = parseInt(e.target.value) || 1;
                                                 if (val > 30) {
                                                     val = 30;
                                                     alert("El máximo de sillas por mesa es de 30 para mantener el diseño.");
                                                 }
                                                 if (val < 1) val = 1;
+
+                                                // AUTO-UNASSIGN guests whose seatIndex is now out of range
+                                                const tableGuests = getGuestsForTable(selectedTable.id);
+                                                const evicted = tableGuests.filter(g => g.seatIndex >= val);
+                                                if (evicted.length > 0) {
+                                                    await Promise.all(evicted.map(g => {
+                                                        if (g.id === 'novio_1' || g.id === 'novio_2') {
+                                                            const pPrefix = g.id === 'novio_1' ? 'novio1' : 'novio2';
+                                                            return updateDoc(doc(db, 'weddings', weddingId), {
+                                                                [`${pPrefix}_tableId`]: null,
+                                                                [`${pPrefix}_seatIndex`]: null
+                                                            });
+                                                        }
+                                                        return updateDoc(doc(db, 'weddings', weddingId, 'guests', g.id), {
+                                                            tableId: null,
+                                                            seatIndex: null
+                                                        });
+                                                    }));
+                                                    showToast(`${evicted.length} invitado${evicted.length > 1 ? 's devueltos' : ' devuelto'} a la lista por falta de sillas.`);
+                                                }
+
                                                 updateTable(selectedTable.id, { seats: val });
                                             }}
                                         />

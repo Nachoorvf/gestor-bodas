@@ -140,17 +140,15 @@ export default function DashboardLayout({ children }) {
                 )}
             </header>
 
-            {/* IMPERSONATION BANNER */}
+            {/* IMPERSONATION BANNER — discreet bottom-left pill */}
             {isImpersonating && (
-                <div className="fixed bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-bounce-in">
-                    <div className="bg-red-500 text-white px-4 md:px-6 py-2 md:py-3 rounded-full shadow-2xl flex items-center gap-3 border border-red-400">
-                        <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap">
-                            <span className="text-sm">👁️</span>
-                            <span><span className="hidden md:inline">Vista </span>Modo Novios</span>
-                        </span>
+                <div className="fixed bottom-24 md:bottom-6 left-4 z-[100]">
+                    <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md text-white pl-3 pr-1.5 py-1.5 rounded-full shadow-lg border border-white/10 opacity-60 hover:opacity-100 transition-opacity duration-300">
+                        <span className="text-sm leading-none">👁️</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap hidden sm:inline">Modo Novios</span>
                         <button
                             onClick={stopImpersonation}
-                            className="bg-white text-red-500 px-3 py-1 md:px-4 md:py-1.5 rounded-full text-[9px] md:text-[10px] font-black uppercase hover:bg-red-100 transition shadow-sm"
+                            className="bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition"
                         >
                             Salir
                         </button>
