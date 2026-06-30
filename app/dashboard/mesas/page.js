@@ -665,54 +665,60 @@ export default function MesasPage() {
                         </div>
                     )}
 
-                    {/* LAYOUT MODE TOGGLE (Floating Bottom Center) */}
-                    {/* Adjusted bottom position for mobile to avoid tab bar */}
-                    <div className="absolute bottom-28 md:bottom-8 left-1/2 -translate-x-1/2 z-30 w-full flex justify-center pointer-events-none">
+                    {/* ── BOTTOM CONTROL BAR ── zoom + layout toggle + legend, mobile-friendly */}
+                    <div className="absolute bottom-20 md:bottom-4 left-4 right-4 z-30 flex items-center justify-between gap-3 pointer-events-none">
+
+                        {/* LEFT: Layout mode toggle */}
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setIsLayoutMode(!isLayoutMode);
-                                setSelectedTableId(null); // Deselect when switching modes
+                                setSelectedTableId(null);
                             }}
                             className={`
-                            pointer-events-auto flex items-center gap-2 px-6 py-3 rounded-full shadow-xl font-bold text-sm transition-all transform hover:scale-105 select-none
-                            ${isLayoutMode
+                                pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-lg font-bold text-sm transition-all select-none shrink-0
+                                ${isLayoutMode
                                     ? 'bg-boda-text text-white ring-4 ring-boda-text/20'
-                                    : 'bg-white text-gray-600 hover:text-boda-text border border-gray-100'
+                                    : 'bg-white text-gray-600 border border-gray-100 hover:border-gray-300'
                                 }
-                        `}
+                            `}
                         >
                             {isLayoutMode ? (
-                                <><span>✅</span> <span>Guardar Distribución</span></>
+                                <><span>✅</span> <span className="hidden sm:inline">Guardar</span></>
                             ) : (
-                                <><span>✏️</span> <span>Editar Distribución</span></>
+                                <><span>✏️</span> <span className="hidden sm:inline">Editar</span></>
                             )}
                         </button>
-                    </div>
 
-                    {/* Zoom Controls */}
-                    <div className="absolute top-4 right-4 z-30 flex flex-col gap-2 items-end">
-                        <div className="flex gap-2 bg-white p-1.5 rounded-xl shadow-lg border border-gray-100">
-                            <button onClick={() => setZoom(z => Math.max(0.4, z - 0.1))} className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 font-bold text-gray-500 text-xl md:text-base">-</button>
-                            <span className="flex items-center text-xs font-bold text-gray-400 w-8 justify-center">{Math.round(zoom * 100)}%</span>
-                            <button onClick={() => setZoom(z => Math.min(1.5, z + 0.1))} className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-lg hover:bg-gray-50 font-bold text-gray-500 text-xl md:text-base">+</button>
+                        {/* CENTER: Zoom controls */}
+                        <div className="pointer-events-auto flex items-center gap-1 bg-white/90 backdrop-blur-sm px-2 py-1.5 rounded-2xl shadow-lg border border-gray-100">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setZoom(z => Math.max(0.4, z - 0.1)); }}
+                                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-gray-100 font-bold text-gray-500 text-xl active:scale-95 transition"
+                            >−</button>
+                            <span className="text-xs font-bold text-gray-400 w-10 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setZoom(z => Math.min(1.5, z + 0.1)); }}
+                                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-gray-100 font-bold text-gray-500 text-xl active:scale-95 transition"
+                            >+</button>
                         </div>
-                        {/* Color Legend */}
-                        <div className="bg-white/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-gray-100 flex flex-col gap-1.5">
-                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Leyenda</span>
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-blue-500 shrink-0" />
-                                <span className="text-[10px] text-gray-500 font-medium">Confirmado</span>
+
+                        {/* RIGHT: Legend pill */}
+                        <div className="pointer-events-auto flex items-center gap-2.5 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-100 shrink-0">
+                            <div className="flex items-center gap-1.5" title="Confirmado">
+                                <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                                <span className="text-[9px] font-bold text-gray-400 hidden sm:inline">Confirmado</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-red-500 shrink-0" />
-                                <span className="text-[10px] text-gray-500 font-medium">No viene</span>
+                            <div className="flex items-center gap-1.5" title="No viene">
+                                <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                                <span className="text-[9px] font-bold text-gray-400 hidden sm:inline">No viene</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-gray-400 shrink-0" />
-                                <span className="text-[10px] text-gray-500 font-medium">Sin respuesta</span>
+                            <div className="flex items-center gap-1.5" title="Sin respuesta">
+                                <div className="w-2.5 h-2.5 rounded-full bg-gray-400" />
+                                <span className="text-[9px] font-bold text-gray-400 hidden sm:inline">Pendiente</span>
                             </div>
                         </div>
+
                     </div>
 
                     {/* Canvas Area */}
