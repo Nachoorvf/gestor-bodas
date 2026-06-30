@@ -196,7 +196,7 @@ export default function MesasPage() {
             createdAt: new Date().toISOString()
         });
         setSelectedTableId(docRef.id);
-        setActiveTab('inspector');
+        if (window.innerWidth < 768) setActiveTab('inspector');
     };
 
     const updateTable = async (id, data) => {
@@ -407,8 +407,8 @@ export default function MesasPage() {
 
             setSelectedTableId(tableId);
 
-            // Prevent auto-opening the editor while arranging layout to avoid disruption
-            if (!isLayoutMode) {
+            // Only switch tab on mobile — on desktop all 3 panels are always visible
+            if (!isLayoutMode && window.innerWidth < 768) {
                 setActiveTab('inspector');
             }
         }
@@ -446,7 +446,7 @@ export default function MesasPage() {
 
                 {/* 1. LEFT SIDEBAR: GUESTS */}
                 <div className={`
-                    ${activeTab === 'guests' ? 'flex absolute inset-0 bg-white z-40' : 'hidden md:flex'}
+                    ${activeTab === 'guests' ? 'flex absolute inset-0 bg-white z-40 md:relative md:inset-auto md:z-auto' : 'hidden md:flex'}
                     w-full md:w-80 bg-white rounded-3xl shadow-sm border border-gray-100 flex-col overflow-hidden shrink-0 animate-slide-in-left
                 `}>
                     <div className="p-5 border-b border-gray-100 flex flex-col gap-4">
@@ -862,7 +862,7 @@ export default function MesasPage() {
 
                 {/* 3. RIGHT SIDEBAR: INSPECTOR (Contextual) */}
                 <div className={`
-                ${activeTab === 'inspector' ? 'flex absolute inset-0 bg-white z-40' : 'hidden md:flex'}
+                ${activeTab === 'inspector' ? 'flex absolute inset-0 bg-white z-40 md:relative md:inset-auto md:z-auto' : 'hidden md:flex'}
                 w-full md:w-80 bg-white rounded-3xl shadow-sm border border-gray-100 flex-col overflow-hidden shrink-0 animate-slide-in-right
             `}>
                     {selectedTable ? (
