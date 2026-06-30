@@ -154,6 +154,11 @@ export default function MesasPage() {
 
     const unassignedGuests = allGuests.filter(g => !g.tableId && g.confirmado !== false).filter(g => g.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
 
+    // Guests already assigned to a table (only shown when searching)
+    const assignedMatchingGuests = searchTerm.trim()
+        ? allGuests.filter(g => g.tableId && g.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
+        : [];
+
     // HELPER: Group Guests
     const getGroupedGuests = () => {
         if (groupingMode === 'all') return {};
@@ -484,6 +489,35 @@ export default function MesasPage() {
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-2 mb-2">
                             Sin Asignar ({unassignedGuests.length})
                         </p>
+
+                        {/* ASSIGNED GUESTS MATCHING SEARCH */}
+                        {assignedMatchingGuests.length > 0 && (
+                            <div className="mb-4">
+                                <p className="text-xs font-bold text-blue-400 uppercase tracking-widest px-2 mb-2">
+                                    Ya asignados ({assignedMatchingGuests.length})
+                                </p>
+                                {assignedMatchingGuests.map(guest => {
+                                    const tableOfGuest = tables.find(t => t.id === guest.tableId);
+                                    return (
+                                        <div
+                                            key={guest.id}
+                                            className="p-3 rounded-xl border border-blue-100 bg-blue-50 flex items-center justify-between mb-1"
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <span className="font-medium text-sm text-blue-800 truncate block">{guest.nombre}</span>
+                                                <span className="text-[10px] text-blue-400 font-medium">{tableOfGuest ? `📍 ${tableOfGuest.name}` : 'Mesa desconocida'}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => unassignGuest(guest.id)}
+                                                className="ml-2 text-blue-300 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition"
+                                                title="Quitar de mesa"
+                                            >✕</button>
+                                        </div>
+                                    );
+                                })}
+                                <div className="border-t border-gray-100 mt-3 mb-2" />
+                            </div>
+                        )}
 
                         {/* RENDER LOGIC BASED ON MODE */}
                         {groupingMode === 'all' ? (
@@ -872,13 +906,34 @@ export default function MesasPage() {
                                             className="w-full bg-gray-50 rounded-xl px-3 py-2 text-sm font-medium outline-none border border-gray-100"
                                             value={selectedTable.seats}
                                             min="1" max="30"
-                                            onChange={(e) => {
+                                            onChange={async (e) => {
                                                 let val = parseInt(e.target.value) || 1;
                                                 if (val > 30) {
                                                     val = 30;
                                                     alert("El máximo de sillas por mesa es de 30 para mantener el diseño.");
                                                 }
                                                 if (val < 1) val = 1;
+
+                                                // AUTO-UNASSIGN guests whose seatIndex is now out of range
+                                                const tableGuests = getGuestsForTable(selectedTable.id);
+                                                const evicted = tableGuests.filter(g => g.seatIndex >= val);
+                                                if (evicted.length > 0) {
+                                                    await Promise.all(evicted.map(g => {
+                                                        if (g.id === 'novio_1' || g.id === 'novio_2') {
+                                                            const pPrefix = g.id === 'novio_1' ? 'novio1' : 'novio2';
+                                                            return updateDoc(doc(db, 'weddings', weddingId), {
+                                                                [`${pPrefix}_tableId`]: null,
+                                                                [`${pPrefix}_seatIndex`]: null
+                                                            });
+                                                        }
+                                                        return updateDoc(doc(db, 'weddings', weddingId, 'guests', g.id), {
+                                                            tableId: null,
+                                                            seatIndex: null
+                                                        });
+                                                    }));
+                                                    showToast(`${evicted.length} invitado${evicted.length > 1 ? 's devueltos' : ' devuelto'} a la lista por falta de sillas.`);
+                                                }
+
                                                 updateTable(selectedTable.id, { seats: val });
                                             }}
                                         />
