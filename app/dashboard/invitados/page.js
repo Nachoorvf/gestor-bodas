@@ -14,6 +14,7 @@ export default function InvitadosPage() {
     const [invitations, setInvitations] = useState([]);
     const [guests, setGuests] = useState([]);
     const [guestGroups, setGuestGroups] = useState([]); // Custom groups
+    const [weddingData, setWeddingData] = useState(null);
 
     // EDIT GUEST STATE
     const [editingGuest, setEditingGuest] = useState(null);
@@ -50,6 +51,12 @@ export default function InvitadosPage() {
     useEffect(() => {
         if (!weddingId) return;
 
+        const unsubWedding = onSnapshot(doc(db, 'weddings', weddingId), (docSnap) => {
+            if (docSnap.exists()) {
+                setWeddingData(docSnap.data());
+            }
+        });
+
         const qInv = query(collection(db, 'weddings', weddingId, 'invitations'), orderBy('createdAt', 'desc'));
         const unsubInv = onSnapshot(qInv, (snap) => {
             setInvitations(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -77,7 +84,7 @@ export default function InvitadosPage() {
             }
         });
 
-        return () => { unsubInv(); unsubGuests(); };
+        return () => { unsubWedding(); unsubInv(); unsubGuests(); };
     }, [weddingId]);
 
     // 1. UNIFIED CREATE (Guest + Wrapper Invitation)
@@ -273,10 +280,18 @@ export default function InvitadosPage() {
 
     const sendWhatsApp = (invId, phone) => {
         const url = getInvitationLink(invId);
-        const text = `¡Hola! Aquí tienes la invitación para la boda: ${url}`;
+        const customMsg = weddingData?.invitationConfig?.rsvp?.whatsappMessage || "¡Hola! Aquí tienes la invitación para la boda:";
+        let text = customMsg.trim();
+        if (text.includes('{enlace}')) {
+            text = text.replace(/{enlace}/g, url);
+        } else if (text.includes('{link}')) {
+            text = text.replace(/{link}/g, url);
+        } else {
+            text = `${text} ${url}`;
+        }
         const target = phone ? `https://wa.me/${phone.replace(/\s+/g, '')}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
         window.open(target, '_blank');
-    }
+    };
 
     const handleSelectGuestFromList = (guest) => {
         // Select the invitation
