@@ -135,7 +135,7 @@ export default function InvitationConfigPage() {
         location: { enabled: false, address: '', mapUrl: '', title: 'Ubicación', order: 1 },
         bank: { enabled: false, iban: '', message: '', title: 'Regalo', subtitle: 'Un detalle para nosotros', order: 3 },
         timeline: { enabled: false, events: [], title: 'Agenda', order: 2 },
-        rsvp: { enabled: true, askAllergies: true, askSong: true, askMessage: true, title: 'Formulario de Asistencia', order: 4 },
+        rsvp: { enabled: true, askAllergies: true, askSong: true, askMessage: true, title: 'Formulario de Asistencia', whatsappMessage: '¡Hola! Aquí tienes la invitación para la boda:', order: 4 },
         bus: { enabled: false },
         design: {
             primaryColor: '#C5A065',
@@ -167,7 +167,7 @@ export default function InvitationConfigPage() {
                                 ...fetched,
                                 location: { ...prev.location, ...fetched.location },
                                 timeline: { ...prev.timeline, ...fetched.timeline },
-                                rsvp: { ...prev.rsvp, ...fetched.rsvp },
+                                rsvp: { ...(prev.rsvp || { enabled: true, askAllergies: true, askSong: true, askMessage: true, title: 'Formulario de Asistencia', whatsappMessage: '¡Hola! Aquí tienes la invitación para la boda:', order: 4 }), ...fetched.rsvp },
                                 bank: { ...prev.bank, ...fetched.bank },
                                 design: { ...prev.design, ...fetched.design },
                                 customBlocks: fetched.customBlocks || []
@@ -939,6 +939,16 @@ export default function InvitationConfigPage() {
                                                 <Trash2 size={12} /> Eliminar fecha límite
                                             </button>
                                         )}
+                                    </FieldGroup>
+
+                                    <FieldGroup label="Mensaje predeterminado de WhatsApp">
+                                        <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">Mensaje al pulsar el botón de enviar por WhatsApp en la lista de invitados. Puedes usar <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-[10px] text-gray-800">{`{enlace}`}</code> para ubicar la posición del enlace a la invitación (si no se incluye, se añadirá automáticamente al final).</p>
+                                        <StyledTextarea
+                                            value={config.rsvp?.whatsappMessage ?? '¡Hola! Aquí tienes la invitación para la boda:'}
+                                            onChange={e => updateModule('rsvp', 'whatsappMessage', e.target.value)}
+                                            placeholder="¡Hola! Te compartimos la invitación a nuestra boda: {enlace}"
+                                            rows={3}
+                                        />
                                     </FieldGroup>
                                 </div>
                             </div>
