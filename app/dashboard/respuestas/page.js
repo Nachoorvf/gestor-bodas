@@ -133,6 +133,8 @@ export default function RespuestasPage() {
     
     // Special Catering list: Only guests who haven't declined attendance and haven't been rejected
     const confirmedAllergiesForCatering = guestsWithAllergies.filter(g => g.confirmado !== false && g.alergiasStatus !== 'rejected');
+    // Confirmed songs for DJ list: Only songs marked as approved (✓) by the couple
+    const confirmedSongsForDj = guestsWithSongs.filter(g => g.cancionStatus === 'approved');
 
     // EMPTY STATE if neither block is enabled and no allergies
     if (!isSongBlockEnabled && !isMessageBlockEnabled && guestsWithAllergies.length === 0) {
@@ -303,12 +305,12 @@ export default function RespuestasPage() {
                                         {guestsWithSongs.length} {guestsWithSongs.length === 1 ? 'canción sugerida' : 'canciones sugeridas'}
                                     </p>
                                 </div>
-                                {guestsWithSongs.length > 0 && (
+                                {confirmedSongsForDj.length > 0 && (
                                     <button
-                                        onClick={() => handleExportSongsPdf('all')}
+                                        onClick={() => handleExportSongsPdf('approved')}
                                         disabled={isGeneratingSongsPdf}
                                         className="flex items-center gap-2 bg-[#333] text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed justify-center"
-                                        title="Descargar PDF con la lista de canciones para el DJ"
+                                        title="Descargar PDF con la lista de canciones confirmadas para el DJ"
                                     >
                                         {isGeneratingSongsPdf ? (
                                             <>
@@ -318,7 +320,7 @@ export default function RespuestasPage() {
                                         ) : (
                                             <>
                                                 <Download size={15} />
-                                                <span>PDF Lista DJ ({guestsWithSongs.length})</span>
+                                                <span>PDF Lista DJ ({confirmedSongsForDj.length})</span>
                                             </>
                                         )}
                                     </button>
