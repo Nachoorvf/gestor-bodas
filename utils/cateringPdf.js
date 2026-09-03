@@ -12,15 +12,13 @@ export async function generateCateringPdf({ weddingData, guests, tables = [], fi
     // Importación dinámica en cliente para evitar conflictos con SSR en Next.js
     const { default: jsPDF } = await import('jspdf');
     const { default: autoTable } = await import('jspdf-autotable');
-    // 1. Filtrar comensales con alergias
-    let filtered = (guests || []).filter(g => g.alergias && g.alergias.trim() !== '');
-
-    if (filterType === 'approved') {
-        filtered = filtered.filter(g => g.alergiasStatus === 'approved');
-    } else {
-        // En caso de exportar todos, excluimos los rechazados a menos que el usuario los quiera
-        filtered = filtered.filter(g => g.alergiasStatus !== 'rejected');
-    }
+    // 1. Filtrar comensales con alergias que asistirán (excluye rechazados y los que han dicho 'No puedo ir')
+    let filtered = (guests || []).filter(g => 
+        g.alergias && 
+        g.alergias.trim() !== '' && 
+        g.confirmado !== false && 
+        g.alergiasStatus !== 'rejected'
+    );
 
     // 2. Ordenar alfabéticamente por nombre (de la A a la Z)
     const sortedGuests = [...filtered].sort((a, b) => {

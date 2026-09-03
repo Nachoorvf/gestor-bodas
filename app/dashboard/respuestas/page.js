@@ -130,9 +130,9 @@ export default function RespuestasPage() {
     const filteredAllergies = guestsWithAllergies.filter(g => filterView === 'pending' ? isPending(g.alergiasStatus) : isProcessed(g.alergiasStatus));
     const filteredMessages = guestsWithMessages.filter(g => filterView === 'pending' ? isPending(g.mensajeStatus) : isProcessed(g.mensajeStatus));
     const filteredSongs = guestsWithSongs.filter(g => filterView === 'pending' ? isPending(g.cancionStatus) : isProcessed(g.cancionStatus));
-
-    // Print Data (Only Approved Allergies)
-    const approvedAllergiesForCatering = guestsWithAllergies.filter(g => g.alergiasStatus === 'approved');
+    
+    // Special Catering list: Only guests who haven't declined attendance and haven't been rejected
+    const confirmedAllergiesForCatering = guestsWithAllergies.filter(g => g.confirmado !== false && g.alergiasStatus !== 'rejected');
 
     // EMPTY STATE if neither block is enabled and no allergies
     if (!isSongBlockEnabled && !isMessageBlockEnabled && guestsWithAllergies.length === 0) {
@@ -211,12 +211,12 @@ export default function RespuestasPage() {
                                         {guestsWithAllergies.length} {guestsWithAllergies.length === 1 ? 'comensal registrado' : 'comensales registrados'} con menú especial
                                     </p>
                                 </div>
-                                {guestsWithAllergies.length > 0 && (
+                                {confirmedAllergiesForCatering.length > 0 && (
                                     <button
                                         onClick={() => handleExportPdf('all')}
                                         disabled={isGeneratingPdf}
                                         className="flex items-center gap-2 bg-[#333] text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed justify-center"
-                                        title="Descargar PDF para catering con todos los menús especiales"
+                                        title="Descargar PDF para catering con las alergias confirmadas de los asistentes"
                                     >
                                         {isGeneratingPdf ? (
                                             <>
@@ -226,7 +226,7 @@ export default function RespuestasPage() {
                                         ) : (
                                             <>
                                                 <Download size={15} />
-                                                <span>PDF Catering ({guestsWithAllergies.length})</span>
+                                                <span>PDF Catering ({confirmedAllergiesForCatering.length})</span>
                                             </>
                                         )}
                                     </button>
