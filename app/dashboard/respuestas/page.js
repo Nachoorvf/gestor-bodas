@@ -3,8 +3,10 @@ import { useState, useEffect } from 'react';
 import { db } from '../../../firebase/config';
 import { doc, getDoc, collection, query, getDocs, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
-import { Music, MessageSquare, AlertCircle, Coffee, Check, X, Printer } from 'lucide-react';
+import { Music, MessageSquare, AlertCircle, Coffee, Check, X, Download, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { generateCateringPdf } from '../../../utils/cateringPdf';
+import { generateSongsPdf } from '../../../utils/songsPdf';
 
 export default function RespuestasPage() {
     const { userData, loading: authLoading } = useAuth();
@@ -17,6 +19,8 @@ export default function RespuestasPage() {
 
     const [activeTab, setActiveTab] = useState('alergias'); // 'alergias', 'mensajes', 'canciones'
     const [filterView, setFilterView] = useState('pending'); // 'pending', 'history'
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [isGeneratingSongsPdf, setIsGeneratingSongsPdf] = useState(false);
 
     useEffect(() => {
         if (!userData?.weddingId) {
@@ -79,8 +83,40 @@ export default function RespuestasPage() {
         return table ? table.name : 'Sin asignar';
     };
 
-    const handlePrint = () => {
-        window.print();
+    const handleExportPdf = async (filterType = 'all') => {
+        setIsGeneratingPdf(true);
+        try {
+            // Breve espera para que React renderice el spinner antes de procesar el PDF
+            await new Promise(resolve => setTimeout(resolve, 80));
+            await generateCateringPdf({
+                weddingData,
+                guests: guestsWithAllergies,
+                tables,
+                filterType
+            });
+        } catch (err) {
+            console.error("Error al generar el PDF de catering:", err);
+            alert("Ocurrió un error al generar el PDF. Por favor, inténtalo de nuevo.");
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    };
+
+    const handleExportSongsPdf = async (filterType = 'all') => {
+        setIsGeneratingSongsPdf(true);
+        try {
+            await new Promise(resolve => setTimeout(resolve, 80));
+            await generateSongsPdf({
+                weddingData,
+                guests: guestsWithSongs,
+                filterType
+            });
+        } catch (err) {
+            console.error("Error al generar el PDF de canciones:", err);
+            alert("Ocurrió un error al generar el PDF de canciones.");
+        } finally {
+            setIsGeneratingSongsPdf(false);
+        }
     };
 
     // Filters
@@ -94,9 +130,11 @@ export default function RespuestasPage() {
     const filteredAllergies = guestsWithAllergies.filter(g => filterView === 'pending' ? isPending(g.alergiasStatus) : isProcessed(g.alergiasStatus));
     const filteredMessages = guestsWithMessages.filter(g => filterView === 'pending' ? isPending(g.mensajeStatus) : isProcessed(g.mensajeStatus));
     const filteredSongs = guestsWithSongs.filter(g => filterView === 'pending' ? isPending(g.cancionStatus) : isProcessed(g.cancionStatus));
-
-    // Print Data (Only Approved Allergies)
-    const approvedAllergiesForCatering = guestsWithAllergies.filter(g => g.alergiasStatus === 'approved');
+    
+    // Special Catering list: Only guests who haven't declined attendance and haven't been rejected
+    const confirmedAllergiesForCatering = guestsWithAllergies.filter(g => g.confirmado !== false && g.alergiasStatus !== 'rejected');
+    // Confirmed songs for DJ list: Only songs marked as approved (✓) by the couple
+    const confirmedSongsForDj = guestsWithSongs.filter(g => g.cancionStatus === 'approved');
 
     // EMPTY STATE if neither block is enabled and no allergies
     if (!isSongBlockEnabled && !isMessageBlockEnabled && guestsWithAllergies.length === 0) {
@@ -119,47 +157,8 @@ export default function RespuestasPage() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto space-y-8 pb-20 px-4 md:px-0 print:p-0 print:m-0 print:w-full print:max-w-none print:space-y-0">
-            {/* HIDDEN PRINT VIEW */}
-            <div className="hidden print:block bg-white">
-                {/* Branding Header */}
-                <div className="flex justify-between items-end border-b-2 border-gray-800 pb-4 mb-8">
-                    <div>
-                        <h1 className="text-4xl font-serif text-gray-900 tracking-tight">El Convite</h1>
-                        <p className="text-sm text-gray-500 uppercase tracking-widest mt-1">Gestión de Bodas</p>
-                    </div>
-                    <div className="text-right">
-                        <h2 className="text-2xl font-display text-gray-800">Reporte para Catering</h2>
-                        <p className="text-sm text-gray-500 mt-1">Listado de Alergias y Menús Especiales Aprobados</p>
-                    </div>
-                </div>
-
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="border-b border-gray-300">
-                            <th className="py-3 font-bold uppercase tracking-wider text-xs text-gray-500">Invitado</th>
-                            <th className="py-3 font-bold uppercase tracking-wider text-xs text-gray-500">Mesa</th>
-                            <th className="py-3 font-bold uppercase tracking-wider text-xs text-gray-500">Alergia / Restricción</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {approvedAllergiesForCatering.length === 0 && (
-                            <tr><td colSpan="3" className="py-4 text-gray-500 italic">No hay alergias aprobadas.</td></tr>
-                        )}
-                        {approvedAllergiesForCatering.map((g, i) => (
-                            <tr key={i} className="border-b border-gray-200">
-                                <td className="py-3 font-medium">{g.nombre}</td>
-                                <td className="py-3 text-gray-600">{getTableName(g.tableId)}</td>
-                                <td className="py-3">{g.alergias}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* NORMAL VIEW */}
-            <div className="print:hidden">
-                <header className="border-b border-gray-100 pb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 md:bg-white md:p-8 md:rounded-[2rem] md:shadow-sm md:border-gray-100">
+        <div className="max-w-5xl mx-auto space-y-8 pb-20 px-4 md:px-0">
+            <header className="border-b border-gray-100 pb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 md:bg-white md:p-8 md:rounded-[2rem] md:shadow-sm md:border-gray-100">
                     <div>
                         <h1 className="text-4xl font-display text-[#333] mb-2">Bandeja de Respuestas</h1>
                         <p className="text-gray-500 font-serif">Gestiona las sugerencias y alergias de tus invitados.</p>
@@ -206,12 +205,32 @@ export default function RespuestasPage() {
                     {activeTab === 'alergias' && (
                         <div className="space-y-4 animate-fade-in-up">
                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6">
-                                <h3 className="font-serif italic text-gray-500 text-lg">
-                                    {filterView === 'pending' ? 'Revisa los nuevos menús especiales:' : 'Alergias ya procesadas:'}
-                                </h3>
-                                {filterView === 'history' && approvedAllergiesForCatering.length > 0 && (
-                                    <button onClick={handlePrint} className="flex items-center gap-2 bg-[var(--primary,#333)] text-white px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black transition shadow-md w-full sm:w-auto justify-center">
-                                        <Printer size={16} /> Generar PDF para Catering
+                                <div>
+                                    <h3 className="font-serif italic text-gray-500 text-lg">
+                                        {filterView === 'pending' ? 'Revisa los nuevos menús especiales:' : 'Alergias ya procesadas:'}
+                                    </h3>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        {guestsWithAllergies.length} {guestsWithAllergies.length === 1 ? 'comensal registrado' : 'comensales registrados'} con menú especial
+                                    </p>
+                                </div>
+                                {confirmedAllergiesForCatering.length > 0 && (
+                                    <button
+                                        onClick={() => handleExportPdf('all')}
+                                        disabled={isGeneratingPdf}
+                                        className="flex items-center gap-2 bg-[#333] text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed justify-center"
+                                        title="Descargar PDF para catering con las alergias confirmadas de los asistentes"
+                                    >
+                                        {isGeneratingPdf ? (
+                                            <>
+                                                <Loader2 size={15} className="animate-spin text-amber-400" />
+                                                <span>Generando PDF...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Download size={15} />
+                                                <span>PDF Catering ({confirmedAllergiesForCatering.length})</span>
+                                            </>
+                                        )}
                                     </button>
                                 )}
                             </div>
@@ -277,9 +296,36 @@ export default function RespuestasPage() {
                     {/* SONGS */}
                     {activeTab === 'canciones' && (
                         <div className="space-y-4 animate-fade-in-up">
-                            <h3 className="font-serif italic text-gray-500 mb-6 text-lg">
-                                {filterView === 'pending' ? 'Nuevas canciones sugeridas:' : 'Sugerencias ya procesadas:'}
-                            </h3>
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6">
+                                <div>
+                                    <h3 className="font-serif italic text-gray-500 text-lg">
+                                        {filterView === 'pending' ? 'Nuevas canciones sugeridas:' : 'Sugerencias ya procesadas:'}
+                                    </h3>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        {guestsWithSongs.length} {guestsWithSongs.length === 1 ? 'canción sugerida' : 'canciones sugeridas'}
+                                    </p>
+                                </div>
+                                {confirmedSongsForDj.length > 0 && (
+                                    <button
+                                        onClick={() => handleExportSongsPdf('approved')}
+                                        disabled={isGeneratingSongsPdf}
+                                        className="flex items-center gap-2 bg-[#333] text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed justify-center"
+                                        title="Descargar PDF con la lista de canciones confirmadas para el DJ"
+                                    >
+                                        {isGeneratingSongsPdf ? (
+                                            <>
+                                                <Loader2 size={15} className="animate-spin text-amber-400" />
+                                                <span>Generando PDF...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Download size={15} />
+                                                <span>PDF Lista DJ ({confirmedSongsForDj.length})</span>
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+                            </div>
                             {filteredSongs.length === 0 ? (
                                 <div className="bg-gray-50 rounded-3xl p-10 text-center border border-dashed border-gray-200">
                                     <p className="text-gray-400 font-serif italic text-lg">No hay canciones {filterView === 'pending' ? 'pendientes' : 'en el historial'}.</p>
@@ -307,6 +353,5 @@ export default function RespuestasPage() {
                     )}
                 </div>
             </div>
-        </div>
     );
 }
