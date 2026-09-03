@@ -6,6 +6,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { Music, MessageSquare, AlertCircle, Coffee, Check, X, Download, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { generateCateringPdf } from '../../../utils/cateringPdf';
+import { generateSongsPdf } from '../../../utils/songsPdf';
 
 export default function RespuestasPage() {
     const { userData, loading: authLoading } = useAuth();
@@ -19,6 +20,7 @@ export default function RespuestasPage() {
     const [activeTab, setActiveTab] = useState('alergias'); // 'alergias', 'mensajes', 'canciones'
     const [filterView, setFilterView] = useState('pending'); // 'pending', 'history'
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [isGeneratingSongsPdf, setIsGeneratingSongsPdf] = useState(false);
 
     useEffect(() => {
         if (!userData?.weddingId) {
@@ -97,6 +99,23 @@ export default function RespuestasPage() {
             alert("Ocurrió un error al generar el PDF. Por favor, inténtalo de nuevo.");
         } finally {
             setIsGeneratingPdf(false);
+        }
+    };
+
+    const handleExportSongsPdf = async (filterType = 'all') => {
+        setIsGeneratingSongsPdf(true);
+        try {
+            await new Promise(resolve => setTimeout(resolve, 80));
+            await generateSongsPdf({
+                weddingData,
+                guests: guestsWithSongs,
+                filterType
+            });
+        } catch (err) {
+            console.error("Error al generar el PDF de canciones:", err);
+            alert("Ocurrió un error al generar el PDF de canciones.");
+        } finally {
+            setIsGeneratingSongsPdf(false);
         }
     };
 
@@ -193,37 +212,24 @@ export default function RespuestasPage() {
                                     </p>
                                 </div>
                                 {guestsWithAllergies.length > 0 && (
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <button
-                                            onClick={() => handleExportPdf('all')}
-                                            disabled={isGeneratingPdf}
-                                            className="flex items-center gap-2 bg-[#333] text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed justify-center"
-                                            title="Descargar PDF para catering con todos los menús especiales"
-                                        >
-                                            {isGeneratingPdf ? (
-                                                <>
-                                                    <Loader2 size={15} className="animate-spin text-amber-400" />
-                                                    <span>Generando PDF...</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Download size={15} />
-                                                    <span>PDF Catering ({guestsWithAllergies.length})</span>
-                                                </>
-                                            )}
-                                        </button>
-                                        {approvedAllergiesForCatering.length > 0 && (
-                                            <button
-                                                onClick={() => handleExportPdf('approved')}
-                                                disabled={isGeneratingPdf}
-                                                className="flex items-center gap-2 bg-white text-[#333] border border-gray-200 hover:border-gray-400 px-3.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed justify-center"
-                                                title="Descargar PDF solo con las alergias aprobadas"
-                                            >
-                                                <Check size={14} className="text-green-600" />
-                                                <span>Solo Aprobados ({approvedAllergiesForCatering.length})</span>
-                                            </button>
+                                    <button
+                                        onClick={() => handleExportPdf('all')}
+                                        disabled={isGeneratingPdf}
+                                        className="flex items-center gap-2 bg-[#333] text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed justify-center"
+                                        title="Descargar PDF para catering con todos los menús especiales"
+                                    >
+                                        {isGeneratingPdf ? (
+                                            <>
+                                                <Loader2 size={15} className="animate-spin text-amber-400" />
+                                                <span>Generando PDF...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Download size={15} />
+                                                <span>PDF Catering ({guestsWithAllergies.length})</span>
+                                            </>
                                         )}
-                                    </div>
+                                    </button>
                                 )}
                             </div>
 
@@ -288,9 +294,36 @@ export default function RespuestasPage() {
                     {/* SONGS */}
                     {activeTab === 'canciones' && (
                         <div className="space-y-4 animate-fade-in-up">
-                            <h3 className="font-serif italic text-gray-500 mb-6 text-lg">
-                                {filterView === 'pending' ? 'Nuevas canciones sugeridas:' : 'Sugerencias ya procesadas:'}
-                            </h3>
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6">
+                                <div>
+                                    <h3 className="font-serif italic text-gray-500 text-lg">
+                                        {filterView === 'pending' ? 'Nuevas canciones sugeridas:' : 'Sugerencias ya procesadas:'}
+                                    </h3>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        {guestsWithSongs.length} {guestsWithSongs.length === 1 ? 'canción sugerida' : 'canciones sugeridas'}
+                                    </p>
+                                </div>
+                                {guestsWithSongs.length > 0 && (
+                                    <button
+                                        onClick={() => handleExportSongsPdf('all')}
+                                        disabled={isGeneratingSongsPdf}
+                                        className="flex items-center gap-2 bg-[#333] text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed justify-center"
+                                        title="Descargar PDF con la lista de canciones para el DJ"
+                                    >
+                                        {isGeneratingSongsPdf ? (
+                                            <>
+                                                <Loader2 size={15} className="animate-spin text-amber-400" />
+                                                <span>Generando PDF...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Download size={15} />
+                                                <span>PDF Lista DJ ({guestsWithSongs.length})</span>
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+                            </div>
                             {filteredSongs.length === 0 ? (
                                 <div className="bg-gray-50 rounded-3xl p-10 text-center border border-dashed border-gray-200">
                                     <p className="text-gray-400 font-serif italic text-lg">No hay canciones {filterView === 'pending' ? 'pendientes' : 'en el historial'}.</p>

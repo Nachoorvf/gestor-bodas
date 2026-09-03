@@ -123,7 +123,9 @@ export default function DashboardOverview() {
 
           <div className="hidden sm:block text-right">
             <IconDiamond className="w-8 h-8 text-[#B88E2F] opacity-50 ml-auto mb-2" />
-            <p className="font-serif italic text-lg">{new Date(weddingData?.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p className="font-serif italic text-lg">
+              {weddingData?.fecha ? new Date(weddingData.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Fecha por definir'}
+            </p>
           </div>
         </div>
 

@@ -23,22 +23,41 @@ service cloud.firestore {
 
     // WEDDINGS
     match /weddings/{weddingId} {
+      // Allow public read of basic wedding info so guests can load invitation details
+      allow read: if true;
+      
       // Create: Allow admins (for test weddings)
       allow create: if isSignedIn() && isAdmin();
       
-      // Read/Update: Allow Admins OR the couple that owns it
-      allow read, update: if isSignedIn() && (
+      // Update: Allow Admins OR the couple that owns it
+      allow update: if isSignedIn() && (
         isAdmin() || 
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.weddingId == weddingId
       );
       
-      // Delete: ONLY Admin (Already handled via Server Action, but good to block client-side delete explicitly except for admin)
-      // Actually, my server action uses firebase-admin which bypasses rules. 
-      // Client-side delete was removed from UI, so we can disallow delete here to be safe, 
-      // or allow it only for admins just in case legacy code runs.
-      allow delete: if false; // Strict: Deletes must go through Server Action (firebase-admin)
+      // Delete: Deletes go through Server Action (firebase-admin)
+      allow delete: if false;
 
-      // Subcollections (guests, tables, expenses)
+      // INVITATIONS (Public read so guests can load their envelope)
+      match /invitations/{invitationId} {
+        allow read: if true;
+        allow write: if isSignedIn() && (
+          isAdmin() || 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.weddingId == weddingId
+        );
+      }
+
+      // GUESTS (Public read & update so guests can confirm attendance, allergies, bus, songs, messages)
+      match /guests/{guestId} {
+        allow read: if true;
+        allow update: if true;
+        allow create, delete: if isSignedIn() && (
+          isAdmin() || 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.weddingId == weddingId
+        );
+      }
+
+      // OTHER SUBCOLLECTIONS (tables, expenses, etc.)
       match /{document=**} {
         allow read, write: if isSignedIn() && (
           isAdmin() || 
@@ -49,16 +68,16 @@ service cloud.firestore {
 
     // WEDDING REQUESTS
     match /wedding_requests/{requestId} {
-      // Create: Allow any signed-in user (who wants a wedding)
       allow create: if isSignedIn();
-      
-      // Read/Update/Delete: Only Admin
       allow read, update, delete: if isSignedIn() && isAdmin();
-      
-      // Allow user to read THEIR OWN request (to show status? Maybe needed later, for now Admin only is safer unless UI needs it)
-      // The Request page checks for pending requests via: where('userId', '==', currentUser.uid)
-      // So we MUST allow users to read requests where userId == auth.uid
       allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+    }
+
+    // AUDIT LOGS
+    match /audit_logs/{logId} {
+      allow create: if isSignedIn() && isAdmin();
+      allow read: if isSignedIn() && isAdmin();
     }
   }
 }
+
