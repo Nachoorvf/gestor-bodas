@@ -9,7 +9,7 @@ import {
     MapPin, Calendar, Gift, Type, Image as ImageIcon, Video,
     Clock, Images, Trash2, Plus, ChevronUp, ChevronDown,
     Palette, Smartphone, AlignLeft, Eye, X, Check, Music, MessageSquare,
-    ChevronRight, Sparkles, LayoutTemplate, CheckCircle2, Upload, Settings
+    ChevronRight, Sparkles, LayoutTemplate, CheckCircle2, Upload, Settings, CalendarCheck
 } from 'lucide-react';
 
 // ─── TOAST ────────────────────────────────────────────────────────────────────
@@ -100,6 +100,7 @@ function AddBlockButton({ icon, label, onClick, color = 'text-gray-500 bg-gray-5
 // ─── SECTION ICON HELPER ──────────────────────────────────────────────────────
 function getItemIcon(item) {
     if (!item.isCustom) {
+        if (item.id === 'saveTheDate') return { icon: <CalendarCheck size={16} />, color: 'text-amber-700 bg-amber-50' };
         if (item.id === 'location') return { icon: <MapPin size={16} />, color: 'text-[#C5A065] bg-[#C5A065]/10' };
         if (item.id === 'timeline') return { icon: <Calendar size={16} />, color: 'text-[#C5A065] bg-[#C5A065]/10' };
         if (item.id === 'bank') return { icon: <Gift size={16} />, color: 'text-[#C5A065] bg-[#C5A065]/10' };
@@ -132,6 +133,7 @@ export default function InvitationConfigPage() {
     const [saving, setSaving] = useState(false);
 
     const [config, setConfig] = useState({
+        saveTheDate: { enabled: false, title: 'Save the Date', subtitle: '¡Reserva nuestra fecha!', date: '', time: '18:00', endTime: '04:00', location: '', description: '', order: 1 },
         location: { enabled: false, address: '', mapUrl: '', title: 'Ubicación', order: 1 },
         bank: { enabled: false, iban: '', message: '', title: 'Regalo', subtitle: 'Un detalle para nosotros', order: 3 },
         timeline: { enabled: false, events: [], title: 'Agenda', order: 2 },
@@ -160,17 +162,24 @@ export default function InvitationConfigPage() {
                 try {
                     const wDoc = await getDoc(doc(db, 'weddings', wId));
                     if (wDoc.exists()) {
+                        const wFecha = wDoc.data().fecha || '';
                         if (wDoc.data().invitationConfig) {
                             const fetched = wDoc.data().invitationConfig;
                             setConfig(prev => ({
                                 ...prev,
                                 ...fetched,
+                                saveTheDate: { ...prev.saveTheDate, date: wFecha, ...(fetched.saveTheDate || {}) },
                                 location: { ...prev.location, ...fetched.location },
                                 timeline: { ...prev.timeline, ...fetched.timeline },
                                 rsvp: { ...(prev.rsvp || { enabled: true, askAllergies: true, askSong: true, askMessage: true, title: 'Formulario de Asistencia', whatsappMessage: '¡Hola! Aquí tienes la invitación para la boda:', order: 4 }), ...fetched.rsvp },
                                 bank: { ...prev.bank, ...fetched.bank },
                                 design: { ...prev.design, ...fetched.design },
                                 customBlocks: fetched.customBlocks || []
+                            }));
+                        } else {
+                            setConfig(prev => ({
+                                ...prev,
+                                saveTheDate: { ...prev.saveTheDate, date: wFecha }
                             }));
                         }
                         const qInv = query(collection(db, 'weddings', wId, 'invitations'), limit(1));
@@ -229,7 +238,7 @@ export default function InvitationConfigPage() {
 
     // ── Unified sorted items ───────────────────────────────────────────────────
     const getAllItems = useCallback(() => {
-        const fixed = ['location', 'timeline', 'bank', 'rsvp']
+        const fixed = ['saveTheDate', 'location', 'timeline', 'bank', 'rsvp']
             .filter(k => k === 'rsvp' || config[k]?.enabled)
             .map(k => ({ id: k, type: 'fixed', order: config[k]?.order || 99, ...config[k] }));
         const custom = (config.customBlocks || []).map(b => ({ ...b, isCustom: true }));
@@ -589,6 +598,61 @@ export default function InvitationConfigPage() {
                                                 {isExpanded && (
                                                     <div className="px-4 pb-4 pt-2 border-t border-gray-50 space-y-4 bg-[#FDFCFB]">
 
+                                                        {/* SAVE THE DATE */}
+                                                        {!item.isCustom && item.id === 'saveTheDate' && (
+                                                            <>
+                                                                <FieldGroup label="Subtítulo / Mensaje corto">
+                                                                    <StyledInput
+                                                                        value={config.saveTheDate?.subtitle}
+                                                                        onChange={e => updateModule('saveTheDate', 'subtitle', e.target.value)}
+                                                                        placeholder="¡Reserva nuestra fecha!"
+                                                                    />
+                                                                </FieldGroup>
+                                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                                    <FieldGroup label="Fecha">
+                                                                        <input
+                                                                            type="date"
+                                                                            value={config.saveTheDate?.date || ''}
+                                                                            onChange={e => updateModule('saveTheDate', 'date', e.target.value)}
+                                                                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-[#333] outline-none focus:border-[#C5A065] focus:ring-2 focus:ring-[#C5A065]/10 transition font-mono"
+                                                                        />
+                                                                    </FieldGroup>
+                                                                    <FieldGroup label="Hora inicio">
+                                                                        <input
+                                                                            type="time"
+                                                                            value={config.saveTheDate?.time || '18:00'}
+                                                                            onChange={e => updateModule('saveTheDate', 'time', e.target.value)}
+                                                                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-[#333] outline-none focus:border-[#C5A065] focus:ring-2 focus:ring-[#C5A065]/10 transition font-mono"
+                                                                        />
+                                                                    </FieldGroup>
+                                                                    <FieldGroup label="Hora fin (aprox.)">
+                                                                        <input
+                                                                            type="time"
+                                                                            value={config.saveTheDate?.endTime || '04:00'}
+                                                                            onChange={e => updateModule('saveTheDate', 'endTime', e.target.value)}
+                                                                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-[#333] outline-none focus:border-[#C5A065] focus:ring-2 focus:ring-[#C5A065]/10 transition font-mono"
+                                                                        />
+                                                                    </FieldGroup>
+                                                                </div>
+                                                                <FieldGroup label="Ubicación para el calendario (opcional)">
+                                                                    <StyledInput
+                                                                        value={config.saveTheDate?.location}
+                                                                        onChange={e => updateModule('saveTheDate', 'location', e.target.value)}
+                                                                        placeholder={config.location?.address ? `Por defecto: ${config.location.address}` : "Ej: Finca Las Campanas, Madrid"}
+                                                                        icon={<MapPin size={14} />}
+                                                                    />
+                                                                </FieldGroup>
+                                                                <FieldGroup label="Descripción para el calendario (opcional)">
+                                                                    <StyledTextarea
+                                                                        value={config.saveTheDate?.description}
+                                                                        onChange={e => updateModule('saveTheDate', 'description', e.target.value)}
+                                                                        placeholder="¡Nos casamos! Nos haría mucha ilusión que nos acompañaras en este día tan especial."
+                                                                        rows={2}
+                                                                    />
+                                                                </FieldGroup>
+                                                            </>
+                                                        )}
+
                                                         {/* LOCATION */}
                                                         {!item.isCustom && item.id === 'location' && (
                                                             <>
@@ -874,10 +938,14 @@ export default function InvitationConfigPage() {
                             {/* Add sections */}
                             <div className="space-y-3 pt-2">
                                 {/* Fixed modules (only show if not active) */}
-                                {(!config.location?.enabled || !config.timeline?.enabled || !config.bank?.enabled) && (
+                                {(!config.saveTheDate?.enabled || !config.location?.enabled || !config.timeline?.enabled || !config.bank?.enabled) && (
                                     <div className="space-y-2">
                                         <SectionLabel>Añadir sección</SectionLabel>
                                         <div className="flex flex-wrap gap-2">
+                                            {!config.saveTheDate?.enabled && (
+                                                <AddBlockButton icon={<CalendarCheck size={14} />} label="Save the Date" onClick={() => toggleModule('saveTheDate')}
+                                                    color="text-amber-800 bg-amber-50 hover:bg-amber-100 border-amber-200" />
+                                            )}
                                             {!config.timeline?.enabled && (
                                                 <AddBlockButton icon={<Calendar size={14} />} label="Agenda" onClick={() => toggleModule('timeline')}
                                                     color="text-[#C5A065] bg-[#C5A065]/8 hover:bg-[#C5A065]/15 border-[#C5A065]/20" />
