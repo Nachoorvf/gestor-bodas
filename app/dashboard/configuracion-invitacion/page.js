@@ -942,11 +942,11 @@ export default function InvitationConfigPage() {
                                     </FieldGroup>
 
                                     <FieldGroup label="Mensaje predeterminado de WhatsApp">
-                                        <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">Mensaje al pulsar el botón de enviar por WhatsApp en la lista de invitados. Puedes usar <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-[10px] text-gray-800">{`{enlace}`}</code> para ubicar la posición del enlace a la invitación (si no se incluye, se añadirá automáticamente al final).</p>
+                                        <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">Mensaje al pulsar el botón de enviar por WhatsApp en la lista de invitados. Puedes usar <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-[10px] text-gray-800">{`{nombre}`}</code> para el nombre de los invitados incluidos en el sobre y <code className="bg-gray-200 px-1 py-0.5 rounded font-mono text-[10px] text-gray-800">{`{enlace}`}</code> para la posición del enlace.</p>
                                         <StyledTextarea
                                             value={config.rsvp?.whatsappMessage ?? '¡Hola! Aquí tienes la invitación para la boda:'}
                                             onChange={e => updateModule('rsvp', 'whatsappMessage', e.target.value)}
-                                            placeholder="¡Hola! Te compartimos la invitación a nuestra boda: {enlace}"
+                                            placeholder="¡Hola {nombre}! Te compartimos la invitación a nuestra boda: {enlace}"
                                             rows={3}
                                         />
                                     </FieldGroup>
