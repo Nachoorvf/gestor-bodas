@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { db } from '../../../../firebase/config';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { useParams, useSearchParams } from 'next/navigation';
-import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy, Clock, Image as ImageIcon, Music, MessageSquare, Send, Bus, ArrowRight, ArrowLeft, X, ChevronRight, Lock } from 'lucide-react';
+import { MapPin, Gift, Calendar, ExternalLink, ChevronDown, Check, Copy, Clock, Image as ImageIcon, Music, MessageSquare, Send, Bus, ArrowRight, ArrowLeft, X, ChevronRight, Lock, CalendarCheck, Download } from 'lucide-react';
 
 // ─── BUS SELECTION SHEET ─────────────────────────────────────────────────────
 function BusSheet({ guest, busConfig, onUpdate, onClose }) {
@@ -346,7 +346,7 @@ export default function InvitationPublicPage() {
         if (!config) return null;
 
         // UNIFIED LIST — includes RSVP so it respects user-defined order
-        const fixed = ['location', 'timeline', 'bank', 'rsvp'].map(key => ({
+        const fixed = ['saveTheDate', 'location', 'timeline', 'bank', 'rsvp'].map(key => ({
             id: key,
             type: 'fixed',
             order: config[key]?.order || 99,
@@ -357,7 +357,7 @@ export default function InvitationPublicPage() {
             isCustom: true
         }));
 
-        // Filter: location/timeline/bank require enabled; rsvp is always shown
+        // Filter: fixed modules require enabled (rsvp is always shown)
         const allItems = [...fixed, ...custom]
             .filter(item => item.id === 'rsvp' || item.isCustom || item.enabled)
             .sort((a, b) => a.order - b.order);
@@ -367,6 +367,19 @@ export default function InvitationPublicPage() {
                 {allItems.map((item, index) => {
 
                     // --- FIXED MODULES ---
+                    if (item.id === 'saveTheDate') {
+                        return (
+                            <ScrollReveal key={item.id} delay={index * 80}>
+                                <SaveTheDateBlock
+                                    item={item}
+                                    weddingData={weddingData}
+                                    partner1={partner1}
+                                    partner2={partner2}
+                                    onNotify={setNotification}
+                                />
+                            </ScrollReveal>
+                        );
+                    }
                     if (item.id === 'location') {
                         return (
                             <ScrollReveal key={item.id} delay={index * 80}>
@@ -868,6 +881,172 @@ export default function InvitationPublicPage() {
 }
 
 // --- NEW COMPONENTS ---
+
+function SaveTheDateBlock({ item, weddingData, partner1, partner2, onNotify }) {
+    const rawDate = item.date || weddingData?.fecha || '';
+
+    let day = '24';
+    let monthShort = 'SEP';
+    let monthFull = 'septiembre';
+    let year = '2026';
+    let weekday = 'Sábado';
+
+    if (rawDate) {
+        const parts = rawDate.split('-');
+        if (parts.length === 3) {
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            const d = parseInt(parts[2], 10);
+            if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                const dateObj = new Date(y, m - 1, d);
+                day = String(d);
+                monthShort = dateObj.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '').toUpperCase();
+                const mName = dateObj.toLocaleDateString('es-ES', { month: 'long' });
+                monthFull = mName.charAt(0).toUpperCase() + mName.slice(1);
+                const wName = dateObj.toLocaleDateString('es-ES', { weekday: 'long' });
+                weekday = wName.charAt(0).toUpperCase() + wName.slice(1);
+                year = String(y);
+            }
+        }
+    }
+
+    const title = `Boda de ${partner1} & ${partner2}`;
+    const location = item.location || weddingData?.invitationConfig?.location?.address || '';
+    const description = item.description || `¡Nos casamos! Reserva este día para celebrarlo con nosotros.`;
+
+    const getCalendarDates = () => {
+        const parts = (rawDate || '2026-09-24').split('-');
+        const y = parseInt(parts[0], 10) || 2026;
+        const m = parseInt(parts[1], 10) || 9;
+        const d = parseInt(parts[2], 10) || 24;
+
+        const [sH, sM] = (item.time || '18:00').split(':').map(n => parseInt(n, 10) || 0);
+        const [eH, eM] = (item.endTime || '04:00').split(':').map(n => parseInt(n, 10) || 0);
+
+        const start = new Date(y, m - 1, d, sH, sM, 0);
+        let end = new Date(y, m - 1, d, eH, eM, 0);
+        if (end <= start) {
+            end.setDate(end.getDate() + 1);
+        }
+
+        const pad = (n) => String(n).padStart(2, '0');
+        const formatStr = (dt) => `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
+
+        return {
+            startFormatted: formatStr(start),
+            endFormatted: formatStr(end)
+        };
+    };
+
+    const handleGoogleCalendar = () => {
+        const { startFormatted, endFormatted } = getCalendarDates();
+        const gUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startFormatted}/${endFormatted}&details=${encodeURIComponent(description)}&location=${encodeURIComponent(location)}`;
+        window.open(gUrl, '_blank', 'noopener,noreferrer');
+    };
+
+    const handleAppleCalendar = () => {
+        const { startFormatted, endFormatted } = getCalendarDates();
+        const pad = (n) => String(n).padStart(2, '0');
+        const now = new Date();
+        const nowFormatted = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+
+        const icsContent = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Gestor de Bodas//Save the Date//ES',
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH',
+            'BEGIN:VEVENT',
+            `UID:boda-${Date.now()}@gestorbodas.com`,
+            `DTSTAMP:${nowFormatted}`,
+            `DTSTART:${startFormatted}`,
+            `DTEND:${endFormatted}`,
+            `SUMMARY:${title}`,
+            `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+            `LOCATION:${location}`,
+            'STATUS:CONFIRMED',
+            'END:VEVENT',
+            'END:VCALENDAR'
+        ].join('\r\n');
+
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.setAttribute('download', `boda-${partner1}-${partner2}.ics`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+        if (onNotify) {
+            onNotify({ message: 'Evento de calendario descargado (.ics)', type: 'success' });
+        }
+    };
+
+    return (
+        <div className="w-full bg-white/60 backdrop-blur rounded-2xl border border-white/50 shadow-sm p-4 sm:p-5 transition-all duration-300 hover:bg-white/80 hover:shadow-md">
+            {/* Header info row */}
+            <div className="flex items-center gap-3.5 sm:gap-4">
+                {/* Mini Calendar Leaf Badge */}
+                <div className="w-12 h-12 rounded-xl bg-white border border-[var(--primary)]/25 shadow-xs flex flex-col items-center justify-between overflow-hidden shrink-0">
+                    <div className="w-full bg-[var(--primary)] text-white text-[8px] font-black uppercase tracking-wider py-0.5 text-center leading-none">
+                        {monthShort}
+                    </div>
+                    <div className="flex-1 flex items-center justify-center font-serif text-lg font-bold text-[#333] leading-none pb-0.5">
+                        {day}
+                    </div>
+                </div>
+
+                {/* Date & Title */}
+                <div className="text-left flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                        <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">
+                            {item.title || 'Save the Date'}
+                        </p>
+                        {item.time && (
+                            <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-[var(--primary)]/10 text-[var(--primary)]">
+                                {item.time} H
+                            </span>
+                        )}
+                    </div>
+                    <p className="font-serif text-[#333] text-base sm:text-lg truncate">
+                        {weekday}, {day} de {monthFull}
+                    </p>
+                </div>
+            </div>
+
+            {/* Subtitle if custom */}
+            {item.subtitle && item.subtitle !== '¡Reserva nuestra fecha!' && (
+                <p className="text-xs text-gray-500 font-serif italic text-left mt-2 pl-0.5">
+                    &ldquo;{item.subtitle}&rdquo;
+                </p>
+            )}
+
+            {/* Compact action buttons */}
+            <div className="mt-3 pt-3 border-t border-gray-100/80 flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={handleGoogleCalendar}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-white hover:bg-gray-50 active:bg-gray-100 text-[#333] border border-gray-200 text-[11px] font-bold tracking-wide transition shadow-xs"
+                >
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
+                    </svg>
+                    <span className="truncate">Google Cal</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={handleAppleCalendar}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-white hover:bg-gray-50 active:bg-gray-100 text-[#333] border border-gray-200 text-[11px] font-bold tracking-wide transition shadow-xs"
+                >
+                    <Download size={13} className="text-[var(--primary)] shrink-0" />
+                    <span className="truncate">Apple / iCal</span>
+                </button>
+            </div>
+        </div>
+    );
+}
 
 function CountdownBlock({ targetDate, title }) {
     const [timeLeft, setTimeLeft] = useState(null);
