@@ -653,85 +653,39 @@ export default function InvitationPublicPage() {
                         "{design.celebrationMessage || "¡Queremos celebrar el amor con la gente que más queremos!"}"
                     </div>
 
-                    {/* ENVELOPE & RECIPIENTS PRESENTATION CARD */}
+                    {/* RECIPIENTS PRESENTATION CARD */}
                     {(() => {
                         const validGuests = (guests || []).filter(g => g.nombre && g.nombre.trim() !== '');
                         const count = validGuests.length;
-                        const envelopeName = (invitation?.name || '').trim();
 
-                        // Formateo del encabezado principal
-                        let mainTitle = envelopeName || 'Queridos Invitados';
-                        const isFamilyOrGroup = envelopeName.toLowerCase().includes('familia') ||
-                            envelopeName.toLowerCase().includes('pareja') ||
-                            envelopeName.toLowerCase().includes('los ') ||
-                            envelopeName.toLowerCase().includes('las ');
-
-                        if (count === 1) {
-                            mainTitle = validGuests[0].nombre;
+                        // Formateo limpio directo con los nombres reales de los invitados
+                        let recipientsText = '';
+                        if (count === 0) {
+                            recipientsText = invitation?.name || 'Queridos Invitados';
+                        } else if (count === 1) {
+                            recipientsText = validGuests[0].nombre;
                         } else if (count === 2) {
-                            mainTitle = `${validGuests[0].nombre} & ${validGuests[1].nombre}`;
-                        } else if (count > 2) {
-                            if (!isFamilyOrGroup && validGuests.length > 0) {
-                                mainTitle = `${validGuests[0].nombre} y familia`;
-                            }
+                            recipientsText = `${validGuests[0].nombre} & ${validGuests[1].nombre}`;
+                        } else {
+                            // 3 o más invitados (familia / grupo): "Carlos, Laura, Lucas y Sofía"
+                            const allExceptLast = validGuests.slice(0, -1).map(g => g.nombre).join(', ');
+                            recipientsText = `${allExceptLast} y ${validGuests[validGuests.length - 1].nombre}`;
                         }
 
-                        // Comprobar si el nombre del sobre aporta información adicional (ej. "Familia Gómez" vs los nombres de los miembros)
-                        const showEnvelopeTag = envelopeName &&
-                            !validGuests.some(g => g.nombre.toLowerCase() === envelopeName.toLowerCase()) &&
-                            mainTitle.toLowerCase() !== envelopeName.toLowerCase();
-
                         return (
-                            <div className="mt-8 bg-white/85 backdrop-blur-md p-6 sm:p-8 rounded-3xl shadow-sm border border-stone-200/60 max-w-md w-full mx-auto transform hover:scale-[1.02] transition-all duration-500">
-                                <div className="flex items-center justify-center gap-2 mb-2">
-                                    <span className="h-[1px] w-5 bg-stone-300"></span>
-                                    <p className="text-[10px] uppercase tracking-[0.25em] text-stone-500 font-bold">
-                                        Invitación para
-                                    </p>
-                                    <span className="h-[1px] w-5 bg-stone-300"></span>
-                                </div>
-
-                                {/* Título principal con los nombres de los invitados */}
+                            <div className="mt-8 bg-white/85 backdrop-blur-md p-6 sm:p-8 rounded-3xl shadow-sm border border-stone-200/60 max-w-sm sm:max-w-md w-full mx-auto transform hover:scale-[1.02] transition-all duration-500">
+                                <p className="text-[10px] uppercase tracking-[0.25em] text-stone-500 font-bold mb-2">
+                                    Invitación para
+                                </p>
                                 {count === 2 ? (
                                     <h2 className="text-2xl sm:text-3xl font-display text-[#333] leading-snug">
                                         {validGuests[0].nombre} <span className="font-serif italic text-stone-400 font-light">&</span><br className="hidden sm:inline" /> {validGuests[1].nombre}
                                     </h2>
                                 ) : (
                                     <h2 className="text-2xl sm:text-3xl font-display text-[#333] leading-snug">
-                                        {mainTitle}
+                                        {recipientsText}
                                     </h2>
                                 )}
-
-                                {/* Subtítulo opcional si el sobre tiene un nombre especial como "Familia X" */}
-                                {showEnvelopeTag && (
-                                    <p className="text-xs text-stone-500 font-serif italic mt-1.5">
-                                        Sobre: {envelopeName}
-                                    </p>
-                                )}
-
-                                {/* Desglose visual de todos los miembros incluidos en el sobre */}
-                                {count > 1 && (
-                                    <div className="mt-4 pt-4 border-t border-stone-100">
-                                        <p className="text-[10px] uppercase tracking-widest text-stone-400 font-semibold mb-2.5">
-                                            {count === 2 ? 'Invitados incluidos en este sobre' : 'Miembros de la familia incluidos'}:
-                                        </p>
-                                        <div className="flex flex-wrap justify-center gap-1.5">
-                                            {validGuests.map((g, i) => (
-                                                <span
-                                                    key={g.id || i}
-                                                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-serif bg-stone-50 border border-stone-200/70 text-stone-700 shadow-2xs"
-                                                >
-                                                    {g.nombre}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Indicador de plazas reservadas */}
-                                <div className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-stone-100/80 text-[11px] font-medium text-stone-600">
-                                    <span>{count <= 1 ? '1 plaza reservada' : `${count} plazas reservadas`}</span>
-                                </div>
                             </div>
                         );
                     })()}
