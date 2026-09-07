@@ -280,8 +280,26 @@ export default function InvitadosPage() {
 
     const sendWhatsApp = (invId, phone) => {
         const url = getInvitationLink(invId);
+        const invGuests = guests.filter(g => g.invitationId === invId);
+
+        let guestNamesText = "";
+        if (invGuests.length === 1) {
+            guestNamesText = invGuests[0].nombre;
+        } else if (invGuests.length === 2) {
+            guestNamesText = `${invGuests[0].nombre} y ${invGuests[1].nombre}`;
+        } else if (invGuests.length > 2) {
+            const allExceptLast = invGuests.slice(0, -1).map(g => g.nombre).join(', ');
+            guestNamesText = `${allExceptLast} y ${invGuests[invGuests.length - 1].nombre}`;
+        } else {
+            const inv = invitations.find(i => i.id === invId);
+            guestNamesText = inv?.name || '';
+        }
+
         const customMsg = weddingData?.invitationConfig?.rsvp?.whatsappMessage || "¡Hola! Aquí tienes la invitación para la boda:";
         let text = customMsg.trim();
+        if (text.includes('{nombre}')) {
+            text = text.replace(/{nombre}/g, guestNamesText);
+        }
         if (text.includes('{enlace}')) {
             text = text.replace(/{enlace}/g, url);
         } else if (text.includes('{link}')) {
