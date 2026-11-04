@@ -80,3 +80,45 @@ Los listados fuerzan un salto de página antes de cada sección posterior a la p
 Se ajustó la pantalla del documento a la estética de El Convite: fondo claro, cabecera de marca, fuentes heredadas de la web con fallback local, detalles dorados, controles agrupados y botón principal oscuro. Estos elementos se ocultan en papel. El estilo del PDF conserva sus márgenes y legibilidad. No se ha publicado.
 
 Verificación con la aplicación aislada y Chrome: plano A4 y A3, una página cada uno; listado con fixtures, **22 páginas** (20 mesas y dos apartados), cero páginas vacías, ninguna página con dos mesas y marcadores de los 330 invitados numerados presentes exactamente una vez. Inspección de la pantalla y de una página de mesa con 21 invitados, con nombres largos completos. Cero solicitudes externas o excepciones del navegador. Siete tests aprobados y lint del componente sin errores ni avisos. Archivos funcionales afectados en este ajuste: `MesasPrintDocument.jsx` y `mesasPrint.css`. Sin cambios de datos, dependencias, reglas, commits o despliegues; las limitaciones de integración y otros navegadores continúan vigentes.
+
+## Descarga Excel — una sola hoja
+
+Añadido «Descargar Excel» a la misma vista de documentos. Usa la instantánea confirmada ya preparada, con los mismos bloqueos ante errores/carga pendiente. Archivo `.xlsx` real, una hoja «Distribución de mesas», con bloques de mesas consecutivos, títulos destacados, cabeceras y columnas Asiento/Nombre/Asistencia. Incluye novios, mesas vacías, sin asignar, huérfanos y advertencias; no incorpora datos adicionales de invitados. El archivo avisa de que editarlo no modifica la aplicación.
+
+Generación local en `utils/mesasExcel.mjs`, importada bajo demanda desde el botón; no hay peticiones a servidor, escrituras en Firebase, nuevos modelos ni dependencias nuevas. Paquete OOXML con ZIP sin compresión, CRC32 y estilos acotados a este documento. Las celdas de texto usan `inlineStr`, sin fórmulas ni enlaces externos; se escapan XML y secuencias especiales de OOXML. Los textos que superen 32767 caracteres provocan error explícito en vez de truncamiento silencioso. Se revoca la URL Blob después de iniciar la descarga. El archivo solo se conserva donde el navegador del usuario lo descarga.
+
+Pruebas: `node --test tests/mesas/print.test.mjs tests/mesas/excel.test.mjs`, **10 aprobadas / 0 fallos**. El test de Excel emplea un lector independiente de ZIP/CRC y XML mediante la biblioteca estándar de Python 3 (requisito de ese test, no del producto). Verifica hoja única, todas las personas ficticias, Unicode, caracteres XML, nombres con aspecto de fórmula, celdas de texto y bloqueos ante errores. Lint de componente, generador y test: sin errores ni avisos. `git diff --check`: correcto.
+
+Se pulsó el botón real con Chrome en la previsualización aislada: descarga de `Mesas_Maria_Jose_ficticia_y_Inigo_ficticio_.xlsx` en `/tmp/mesas-excel-downloads`, con cero peticiones externas y cero excepciones del navegador. Se volvió a comprobar el ZIP/CRC y cada XML del archivo descargado. No se ha verificado visualmente su apertura en Microsoft Excel o LibreOffice: esa comprobación de compatibilidad sigue pendiente. Los artefactos de prueba son temporales y no se guardan en el repositorio.
+
+Implementación local en `feature/mesas-excel`, sin commits, push ni despliegues y sin modificar `main`. Archivos de este ajuste: `components/planner/MesasPrintDocument.jsx`, `utils/mesasExcel.mjs`, `tests/mesas/excel.test.mjs` y este informe. No se repitió el build completo de la aplicación principal; la compilación local de la vista aislada y del módulo descargado respondió correctamente.
+
+Referencia de formato consultada: [Microsoft: estructura de SpreadsheetML](https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/structure-of-a-spreadsheetml-document).
+
+## Reducción de esperas al preparar y descargar
+
+Se identificaron tres esperas evitables en el código (sin medir sesiones reales): espera global de escrituras Firebase antes de abrir el documento, tres lecturas adicionales incluso con listeners ya sincronizados, y espera de todas las fuentes de la web antes de invocar la impresión. Excel también se importaba por primera vez al pulsar su botón.
+
+Cambios locales:
+
+- `utils/loadMesasPrint.mjs` separa la carga del documento del SDK, para probar su coordinación sin producción. Reutiliza las tres instantáneas completas de la boda actual únicamente con `fromCache === false` y `hasPendingWrites === false`. Una instantánea ausente, fallida, de otra boda o sin confirmar fuerza las lecturas de servidor, que siguen comprobando metadatos. No se convierte una lectura cacheada en prueba de persistencia.
+- El editor conserva metadatos de sus listeners usando `includeMetadataChanges`. La consulta de invitados es completa, sin `orderBy` que excluya registros sin nombre; el orden alfabético del editor se aplica localmente y los nombres no textuales se representan sin modificar documentos. La exportación recibe los datos completos originales. El estado se reinicia al cambiar boda o usuario.
+- Se esperan únicamente las promesas de las escrituras existentes del editor de mesas, no toda la cola global de Firebase (por ejemplo logs administrativos ajenos). Se conservan el bloqueo ante fallos, pendientes y nuevas escrituras durante la preparación. Los errores síncronos de una escritura también quedan registrados.
+- Mensajes distintos para guardados pendientes, lectura lenta y permisos denegados. Las preparaciones caducadas no inician nuevas lecturas tras resolverse tarde sus guardados. Se mantiene el límite de espera de 15 segundos para operaciones que realmente dependan de servidor; no se añaden reintentos ni lecturas periódicas.
+- Excel se carga con la vista, eliminando la petición de un chunk adicional en el clic. No se almacena ningún archivo. Impresión llama directamente a `window.print()`; la salida impresa ya usa Arial y no necesita bloquearse por fuentes remotas de la interfaz.
+
+Validación: **16 tests aprobados**, con nuevos casos de carga rápida sin lecturas, caché, pendientes, ausencia/error de listeners, otra boda, escritura fallida, modificación concurrente, permisos y caducidad. Los archivos nuevos y el componente pasan lint sin errores/avisos. Lint del archivo completo de mesas vuelve a señalar la inicialización móvil preexistente (`setZoom` dentro de `useEffect`, línea desplazada a 158); ese código no se ha modificado ni se ha desactivado la regla. `git diff --check` correcto.
+
+Medición orientativa Node, con los mismos 335 registros ficticios: apertura con transformación en ~1,5 ms, 0 lecturas adicionales y generación XLSX en ~6,3 ms en la ejecución final (otra ejecución previa de Excel midió ~28 ms). Son medidas locales, variables según equipo/calientamiento, sin latencia de red ni renderizado de navegador: **no son una medición ni una garantía de tiempos en producción**. No se ha consultado Firestore real ni verificado este nuevo flujo con sus respuestas reales. Se conserva la necesidad de prueba de integración aislada antes de publicar.
+
+La optimización está exclusivamente en `feature/mesas-excel`; no se ha hecho commit, push, merge ni despliegue. Las reglas, autenticación, dependencias y datos permanecen intactos.
+
+Criterio de metadatos contrastado con [Firebase: datos offline y metadatos](https://firebase.google.com/docs/firestore/manage-data/enable-offline).
+
+## Comprobación del clic de impresión antes de publicar
+
+El usuario concreta que la demora sucede entre pulsar «Imprimir / Guardar como PDF» y abrir el diálogo del navegador. Se añadió a `tests/mesas/visual-check.mjs` una regresión: simular `document.fonts.ready` como promesa que nunca resuelve y comprobar que el clic invoca `window.print()` sin esperar. Resultado en Chrome aislado: `printInvokedWithoutWaitingForFonts: true`, cero excepciones y cero solicitudes externas. Se regeneraron los tres PDF ficticios. Este test comprueba la ausencia de espera de la aplicación; no mide la ventana nativa ni garantiza el tiempo interno de paginación del navegador.
+
+La compilación completa `npm run build` se repitió con acceso a las fuentes y **terminó con código 0**. Se mantiene un aviso preexistente del fallback opcional `firebase/admin.js` por ausencia del archivo local `service-account.json`; no se han añadido credenciales ni cambiado el Admin SDK. Los 16 tests siguen aprobados y el lint del componente/archivos nuevos/controlador visual pasa. El error preexistente del efecto móvil en lint de la página completa sigue documentado.
+
+El usuario ha autorizado expresamente crear commit en esta rama, push y fusión/push a main para activar Vercel. No se publican reglas ni se migran datos; la rama de seguridad continúa fuera de este cambio. Los párrafos previos «sin commit/despliegue» describen la etapa local anterior a esta autorización.

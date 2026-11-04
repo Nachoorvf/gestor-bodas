@@ -15,6 +15,18 @@ for(let i=0;i<90;i++){if(await evaluate("!!document.querySelector('main button')
 await new Promise(r=>setTimeout(r,1500));
 await evaluate("document.querySelector('main button').click()");
 for(let i=0;i<20;i++){if(await evaluate("!!document.querySelector('dialog[open] svg')"))break;await new Promise(r=>setTimeout(r,200));}
+// Regression: clicking Print must not wait for unrelated web fonts.
+const printClick = await evaluate(`(() => {
+ const original = window.print;
+ let invoked = false;
+ Object.defineProperty(document.fonts, 'ready', { configurable: true, value: new Promise(() => {}) });
+ window.print = () => { invoked = true; };
+ try {
+  Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Imprimir / Guardar como PDF').click();
+  return invoked;
+ } finally { window.print = original; delete document.fonts.ready; }
+})()`);
+if (!printClick) throw new Error('Printing is waiting instead of invoking the browser directly');
 fs.mkdirSync('/tmp/mesas-visual-pdfs',{recursive:true});
 await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true}).then(r=>fs.writeFileSync('/tmp/mesas-visual-pdfs/screen.png',Buffer.from(r.data,'base64')));
 for(const [name,mode,paper] of [['plan-a4','plan','A4'],['plan-a3','plan','A3'],['list-a4','list','A4']]) {
@@ -25,5 +37,5 @@ for(const [name,mode,paper] of [['plan-a4','plan','A4'],['plan-a3','plan','A3'],
  const pdf=await send('Page.printToPDF',{preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false});
  fs.writeFileSync(`/tmp/mesas-visual-pdfs/${name}.pdf`,Buffer.from(pdf.data,'base64'));
 }
-console.log(JSON.stringify({blocked,errors,rows:await evaluate("document.querySelectorAll('tbody tr').length"),text:await evaluate("document.querySelector('.document-heading').innerText")}));
+console.log(JSON.stringify({blocked,errors,printInvokedWithoutWaitingForFonts: printClick,rows:await evaluate("document.querySelectorAll('tbody tr').length"),text:await evaluate("document.querySelector('.document-heading').innerText")}));
 ws.close();

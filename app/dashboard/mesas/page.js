@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../../../firebase/config';
-import { doc, collection, addDoc as firestoreAddDoc, updateDoc as firestoreUpdateDoc, deleteDoc as firestoreDeleteDoc, onSnapshot, query, orderBy, waitForPendingWrites, getDocFromServer, getDocsFromServer } from 'firebase/firestore';
+import { doc, collection, addDoc as firestoreAddDoc, updateDoc as firestoreUpdateDoc, deleteDoc as firestoreDeleteDoc, onSnapshot, getDocFromServer, getDocsFromServer } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import DashboardSkeleton from '../../../components/loaders/DashboardSkeleton';
@@ -9,6 +9,7 @@ import VisualTable from '../../../components/planner/VisualTable';
 
 import MesasPrintDocument from '../../../components/planner/MesasPrintDocument';
 import { prepareMesasPrint } from '../../../utils/mesasPrint.mjs';
+import { loadMesasPrint } from '../../../utils/loadMesasPrint.mjs';
 
 // TABLE PRESETS
 const TABLE_PRESETS = {
@@ -69,14 +70,22 @@ export default function MesasPage() {
     const weddingId = userData?.weddingId;
 
     const [printState, setPrintState] = useState(null);
-    const writeState = useRef({ pending: 0, failed: false, version: 0 });
+    const writeState = useRef({ pending: 0, failed: false, version: 0, promises: new Set() });
+    const printSnapshots = useRef({ weddingId: null });
     const trackWrite = (operation) => {
         writeState.current.pending++;
         writeState.current.version++;
-        return operation().catch(error => {
+        let operationPromise;
+        try { operationPromise = operation(); } catch (error) { operationPromise = Promise.reject(error); }
+        const promise = Promise.resolve(operationPromise).catch(error => {
             writeState.current.failed = true;
             throw error;
-        }).finally(() => { writeState.current.pending--; });
+        }).finally(() => {
+            writeState.current.pending--;
+            writeState.current.promises.delete(promise);
+        });
+        writeState.current.promises.add(promise);
+        return promise;
     };
     const addDoc = (...args) => trackWrite(() => firestoreAddDoc(...args));
     const updateDoc = (...args) => trackWrite(() => firestoreUpdateDoc(...args));
@@ -89,29 +98,30 @@ export default function MesasPage() {
             return;
         }
         setPrintState({ busy: true });
-        const version = writeState.current.version;
-        let timeout;
         try {
-            const result = await Promise.race([
-                (async () => {
-                    await waitForPendingWrites(db);
+            const data = await loadMesasPrint({
+                weddingId,
+                getState: () => printSnapshots.current,
+                getWrites: () => writeState.current,
+                onPhase: message => setPrintState({ busy: true, message }),
+                readServer: async () => {
                     const snapshots = await Promise.all([
                         getDocFromServer(doc(db, 'weddings', weddingId)),
                         getDocsFromServer(collection(db, 'weddings', weddingId, 'tables')),
                         getDocsFromServer(collection(db, 'weddings', weddingId, 'guests'))
                     ]);
-                    if (!snapshots[0].exists()) throw new Error('No se encuentra la boda.');
-                    if (snapshots.some(snapshot => snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites)
-                        || writeState.current.pending || writeState.current.failed || version !== writeState.current.version)
-                        throw new Error('Hay cambios sin confirmar. Espera y vuelve a intentarlo.');
-                    return prepareMesasPrint(snapshots[0].data(), snapshots[1].docs.map(d => ({ ...d.data(), id: d.id })), snapshots[2].docs.map(d => ({ ...d.data(), id: d.id })));
-                })(),
-                new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('No se ha podido confirmar la sincronización. Comprueba tu conexión y vuelve a intentarlo.')), 15000); })
-            ]);
-            setPrintState({ model: result, weddingId, uid: user.uid });
+                    return {
+                        wedding: snapshots[0].exists() ? snapshots[0].data() : null,
+                        tables: snapshots[1].docs.map(d => ({ ...d.data(), id: d.id })),
+                        guests: snapshots[2].docs.map(d => ({ ...d.data(), id: d.id })),
+                        confirmed: snapshots.every(snap => !snap.metadata.fromCache && !snap.metadata.hasPendingWrites)
+                    };
+                }
+            });
+            setPrintState({ model: prepareMesasPrint(data.wedding, data.tables, data.guests), weddingId, uid: user.uid });
         } catch (error) {
             setPrintState({ error: error.message || 'No se han podido cargar los datos para imprimir.' });
-        } finally { clearTimeout(timeout); }
+        }
     };
 
     const [tables, setTables] = useState([]);
@@ -158,19 +168,34 @@ export default function MesasPage() {
     useEffect(() => {
         if (!weddingId) return;
 
-        // Fetch Main Wedding Doc (for partner names and their seats)
-        const unsubWedding = onSnapshot(doc(db, 'weddings', weddingId), (snap) => {
-            if (snap.exists()) setWeddingConfig(snap.data());
-        });
-
-        const unsubTables = onSnapshot(query(collection(db, 'weddings', weddingId, 'tables')),
-            (snap) => setTables(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-        const unsubGuests = onSnapshot(query(collection(db, 'weddings', weddingId, 'guests'), orderBy('nombre')),
-            (snap) => setGuests(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-        return () => { unsubWedding(); unsubTables(); unsubGuests(); };
-    }, [weddingId]);
+        const state = { weddingId };
+        printSnapshots.current = state;
+        const save = (key, snapshot, data) => { state[key] = { metadata: snapshot.metadata, data }; };
+        const fail = key => error => { state[key] = { error }; };
+        const options = { includeMetadataChanges: true };
+        const unsubWedding = onSnapshot(doc(db, 'weddings', weddingId), options, snap => {
+            const data = snap.exists() ? snap.data() : null;
+            save('wedding', snap, data);
+            setWeddingConfig(data);
+        }, fail('wedding'));
+        const unsubTables = onSnapshot(collection(db, 'weddings', weddingId, 'tables'), options, snap => {
+            const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+            save('tables', snap, data);
+            setTables(data);
+        }, fail('tables'));
+        // Full collection for export; sort the editor locally so missing names are
+        // not silently excluded by Firestore orderBy('nombre'). Never write repairs.
+        const unsubGuests = onSnapshot(collection(db, 'weddings', weddingId, 'guests'), options, snap => {
+            const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+            save('guests', snap, data);
+            setGuests(data.map(g => ({ ...g, nombre: typeof g.nombre === 'string' ? g.nombre : '' }))
+                .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')));
+        }, fail('guests'));
+        return () => {
+            if (printSnapshots.current === state) printSnapshots.current = { weddingId: null };
+            unsubWedding(); unsubTables(); unsubGuests();
+        };
+    }, [weddingId, user?.uid]);
 
     // 3. COMBINE GUESTS WITH COUPLE
     const allGuests = [...guests];
@@ -491,7 +516,7 @@ export default function MesasPage() {
             className="fixed inset-0 top-[96px] bg-boda-bg p-4 pb-[80px] z-40 md:static md:p-0 md:bg-transparent md:h-[calc(100vh-160px)] flex flex-col gap-6 overflow-hidden animate-fade-in md:relative"
         >
             <button type="button" className="self-end bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold" onClick={openPrintDocument} disabled={!user || !weddingId || !!printState}>Imprimir mesas</button>
-            {printState && <MesasPrintDocument busy={printState.busy} error={printState.error || (printState.model && (printState.weddingId !== weddingId || printState.uid !== user?.uid) ? 'La sesión o boda ha cambiado. Cierra el documento.' : null)} model={printState.weddingId === weddingId && printState.uid === user?.uid && !authLoading ? printState.model : null} onClose={() => setPrintState(null)} />}
+            {printState && <MesasPrintDocument busy={printState.busy} message={printState.message} error={printState.error || (printState.model && (printState.weddingId !== weddingId || printState.uid !== user?.uid) ? 'La sesión o boda ha cambiado. Cierra el documento.' : null)} model={printState.weddingId === weddingId && printState.uid === user?.uid && !authLoading ? printState.model : null} onClose={() => setPrintState(null)} />}
             {/* MAIN CONTENT SPLIT */}
             <div className="flex flex-col md:flex-row gap-8 flex-1 min-h-0 relative">
 

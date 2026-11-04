@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { wrapTableName } from '../../utils/mesasPrint.mjs';
 import './mesasPrint.css';
+import { downloadMesasExcel } from '../../utils/mesasExcel.mjs';
 
-export default function MesasPrintDocument({ model, busy, error, onClose }) {
+export default function MesasPrintDocument({ model, busy, message, error, onClose }) {
     const dialogRef = useRef(null);
     useEffect(() => {
         const dialog = dialogRef.current;
@@ -22,6 +23,17 @@ export default function MesasPrintDocument({ model, busy, error, onClose }) {
         };
     }, []);
     const [mode, setMode] = useState('plan');
+    const [excelError, setExcelError] = useState('');
+    const [excelBusy, setExcelBusy] = useState(false);
+    const exportExcel = async () => {
+        setExcelBusy(true);
+        setExcelError('');
+        try {
+            downloadMesasExcel(model);
+        } catch (failure) {
+            setExcelError(failure.message || 'No se ha podido generar el archivo Excel.');
+        } finally { setExcelBusy(false); }
+    };
     const [paper, setPaper] = useState('A4');
     const canPrint = model && !model.errors.length && !busy && !error;
     const header = model && <header className="document-heading"><h1>{model.title}</h1><p>Fecha de la boda: {model.date} · {mode === 'plan' ? 'Plano de mesas' : 'Invitados por mesa'}</p><p>{model.total} personas · {model.tables.length} mesas{model.warnings.length > 0 && ` · ${model.warnings.length} incidencias (detalle en listados)`}</p></header>;
@@ -40,11 +52,13 @@ export default function MesasPrintDocument({ model, busy, error, onClose }) {
         <div className="document-controls">
             <label>Documento <select value={mode} onChange={e => setMode(e.target.value)}><option value="plan">Plano horizontal</option><option value="list">Listados A4 vertical</option></select></label>
             {mode === 'plan' && <label>Papel <select value={paper} onChange={e => setPaper(e.target.value)}><option>A4</option><option>A3</option></select></label>}
-            <button className="document-print-button" disabled={!canPrint} onClick={async () => { await document.fonts.ready; window.print(); }}>Imprimir / Guardar como PDF</button>
-            <p>El plano se imprime en horizontal. Los listados, con una mesa por página en A4 vertical. Puedes guardar ambos como PDF desde el navegador.</p>
+            <button disabled={!canPrint || excelBusy} onClick={exportExcel}>{excelBusy ? 'Generando Excel…' : 'Descargar Excel'}</button>
+            <button className="document-print-button" disabled={!canPrint} onClick={() => window.print()}>Imprimir / Guardar como PDF</button>
+            <p>El plano se imprime en horizontal. Los listados, con una mesa por página en A4 vertical. Puedes guardar ambos como PDF o descargar un Excel editable con todas las mesas en una sola hoja. Los cambios en Excel no se guardan en la aplicación.</p>
         </div>
-        {busy && <p role="status">Confirmando guardado y cargando datos del servidor…</p>}
+        {busy && <p role="status">{message || 'Preparando el documento…'}</p>}
         {error && <p role="alert">{error}</p>}
+        {excelError && <p role="alert">{excelError}</p>}
         {model && <>
             {!!model.errors.length && <div role="alert">No se puede imprimir: {model.errors.join(' ')}</div>}
             {!!model.warnings.length && <aside className="document-warnings"><strong>Incidencias que debes revisar (no se han modificado datos)</strong><ul>{model.warnings.map(w => <li key={w}>{w}</li>)}</ul></aside>}
