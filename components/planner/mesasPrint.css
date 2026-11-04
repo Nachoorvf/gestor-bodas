@@ -1,0 +1,52 @@
+.mesas-print-root { margin:0; border:0; width:100%; height:100%; max-width:none; max-height:none; position:fixed; inset:0; z-index:1000; overflow:auto; background:#FAFAFA; color:#18181B; padding:32px; font-family:var(--font-body, Arial),sans-serif; }
+.mesas-print-root, .mesas-print-root * { box-sizing:border-box; }
+.document-toolbar { max-width:1100px; margin:0 auto; padding-bottom:24px; border-bottom:1px solid #e7e5e4; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+.document-brand { display:flex; flex-direction:column; gap:6px; }
+.document-brand span:first-child { font-family:var(--font-display, Georgia),serif; font-size:28px; letter-spacing:.12em; }
+.document-brand span:last-child { color:#71717a; font-size:11px; letter-spacing:.12em; }
+.document-back { border:0; background:transparent; cursor:pointer; font:inherit; color:#52525b; padding:10px; }
+.document-intro { max-width:1100px; margin:40px auto 24px; }
+.document-eyebrow { color:#a17c43; font-size:10px; font-weight:700; letter-spacing:.2em; }
+.document-intro h2 { font-family:var(--font-display, Georgia),serif; font-weight:400; font-size:clamp(30px,4vw,46px); margin:12px 0; }
+.document-intro p { color:#71717a; font-size:14px; line-height:1.7; }
+.document-controls { max-width:1100px; margin:0 auto 24px; padding:24px; border:1px solid #e7e5e4; border-radius:20px; background:#fff; display:flex; flex-wrap:wrap; gap:20px; align-items:end; }
+.document-controls label { display:flex; flex-direction:column; gap:8px; font-size:11px; letter-spacing:.05em; font-weight:700; color:#52525b; }
+.document-controls .document-print-button { background:#18181b; color:white; border-color:#18181b; margin-left:auto; cursor:pointer; }
+.document-controls button:hover:not(:disabled) { background:#5f7a66; border-color:#5f7a66; }
+.document-controls button:focus-visible,.document-controls select:focus-visible,.document-back:focus-visible { outline:2px solid #8aa692; outline-offset:4px; }
+.document-controls button,.document-controls select { background:white; border:1px solid #e4e4e7; padding:12px 16px; border-radius:10px; font:inherit; font-size:13px; min-height:44px; }
+.document-controls button:disabled { opacity:.5; }
+.document-controls p { width:100%; color:#71717a; font-size:12px; line-height:1.7; margin:0; }
+.document-page { background:white; max-width:1100px; margin:24px auto; padding:32px; border:1px solid #e7e5e4; border-radius:16px; box-shadow:0 8px 32px #18181b06; }
+.document-heading { margin-bottom:18px; }
+.document-heading h1 { margin:0 0 8px; font-size:24px; overflow-wrap:anywhere; font-weight:700; }
+.document-heading p { margin:4px 0; }
+.document-plan svg { width:100%; height:65vh; }
+.plan-note { margin-top:12px; font-size:12px; }
+.document-warnings { max-width:1100px; background:#faf6ed; border:1px solid #e8dcc3; border-radius:12px; padding:20px; margin:20px auto; overflow-wrap:anywhere; }
+.document-warnings ul { list-style:disc; padding-left:24px; }
+.roster-section { margin-bottom:24px; }
+.roster-section table { width:100%; border-collapse:collapse; table-layout:fixed; }
+.roster-section th,.roster-section td { padding:8px; border:1px solid #cbd5e1; text-align:left; overflow-wrap:anywhere; }
+.roster-section th { background:#f1f5f9; font-weight:bold; }
+.roster-section th:first-child:not([colspan]) { width:22%; }
+.roster-section th:last-child:not([colspan]) { width:23%; }
+@media print {
+ body:has(.mesas-print-root) > *:not(.mesas-print-root) { display:none !important; }
+ html:has(.mesas-print-root),body:has(.mesas-print-root) { margin:0 !important; padding:0 !important; background:white !important; }
+ .mesas-print-root { display:contents; position:static; height:auto; padding:0; overflow:visible; background:white; }
+ .document-toolbar, .document-intro, .document-controls, .print-mode-plan .document-warnings { display:none !important; }
+ .document-page { max-width:none; margin:0; padding:0; border:0; border-radius:0; box-shadow:none; font-family:Arial,sans-serif; }
+ .document-plan { break-inside:avoid; }
+ .document-plan svg { height:140mm; display:block; }
+ .document-plan.paper-A3 svg { height:220mm; }
+ .document-heading { break-after:avoid; }
+ .roster-section thead { display:table-header-group; }
+ .roster-section tr { break-inside:avoid; }
+ .document-list .roster-section + .roster-section { break-before:page; }
+ .roster-section { break-inside:auto; margin-bottom:0; }
+ .document-warnings { font-size:10pt; background:white; }
+ .document-list { font-size:10pt; }
+}
+
+@media screen and (max-width:640px) { .mesas-print-root { padding:16px; } .document-controls { padding:18px; } .document-controls label { flex:1; } .document-controls .document-print-button { width:100%; margin:0; } .document-page { padding:18px; } }

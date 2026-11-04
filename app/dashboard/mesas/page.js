@@ -1,11 +1,14 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../../../firebase/config';
-import { doc, collection, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { doc, collection, addDoc as firestoreAddDoc, updateDoc as firestoreUpdateDoc, deleteDoc as firestoreDeleteDoc, onSnapshot, query, orderBy, waitForPendingWrites, getDocFromServer, getDocsFromServer } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import DashboardSkeleton from '../../../components/loaders/DashboardSkeleton';
 import VisualTable from '../../../components/planner/VisualTable';
+
+import MesasPrintDocument from '../../../components/planner/MesasPrintDocument';
+import { prepareMesasPrint } from '../../../utils/mesasPrint.mjs';
 
 // TABLE PRESETS
 const TABLE_PRESETS = {
@@ -64,6 +67,52 @@ export default function MesasPage() {
     const router = useRouter();
     const { user, userData, loading: authLoading } = useAuth();
     const weddingId = userData?.weddingId;
+
+    const [printState, setPrintState] = useState(null);
+    const writeState = useRef({ pending: 0, failed: false, version: 0 });
+    const trackWrite = (operation) => {
+        writeState.current.pending++;
+        writeState.current.version++;
+        return operation().catch(error => {
+            writeState.current.failed = true;
+            throw error;
+        }).finally(() => { writeState.current.pending--; });
+    };
+    const addDoc = (...args) => trackWrite(() => firestoreAddDoc(...args));
+    const updateDoc = (...args) => trackWrite(() => firestoreUpdateDoc(...args));
+    const deleteDoc = (...args) => trackWrite(() => firestoreDeleteDoc(...args));
+
+    const openPrintDocument = async () => {
+        if (!user || !weddingId || authLoading) return;
+        if (writeState.current.failed) {
+            setPrintState({ error: 'Una escritura del editor ha fallado. Recarga y comprueba los datos antes de imprimir.' });
+            return;
+        }
+        setPrintState({ busy: true });
+        const version = writeState.current.version;
+        let timeout;
+        try {
+            const result = await Promise.race([
+                (async () => {
+                    await waitForPendingWrites(db);
+                    const snapshots = await Promise.all([
+                        getDocFromServer(doc(db, 'weddings', weddingId)),
+                        getDocsFromServer(collection(db, 'weddings', weddingId, 'tables')),
+                        getDocsFromServer(collection(db, 'weddings', weddingId, 'guests'))
+                    ]);
+                    if (!snapshots[0].exists()) throw new Error('No se encuentra la boda.');
+                    if (snapshots.some(snapshot => snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites)
+                        || writeState.current.pending || writeState.current.failed || version !== writeState.current.version)
+                        throw new Error('Hay cambios sin confirmar. Espera y vuelve a intentarlo.');
+                    return prepareMesasPrint(snapshots[0].data(), snapshots[1].docs.map(d => ({ ...d.data(), id: d.id })), snapshots[2].docs.map(d => ({ ...d.data(), id: d.id })));
+                })(),
+                new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('No se ha podido confirmar la sincronización. Comprueba tu conexión y vuelve a intentarlo.')), 15000); })
+            ]);
+            setPrintState({ model: result, weddingId, uid: user.uid });
+        } catch (error) {
+            setPrintState({ error: error.message || 'No se han podido cargar los datos para imprimir.' });
+        } finally { clearTimeout(timeout); }
+    };
 
     const [tables, setTables] = useState([]);
     const [guests, setGuests] = useState([]); // Real guests from DB
@@ -441,6 +490,8 @@ export default function MesasPage() {
         <div
             className="fixed inset-0 top-[96px] bg-boda-bg p-4 pb-[80px] z-40 md:static md:p-0 md:bg-transparent md:h-[calc(100vh-160px)] flex flex-col gap-6 overflow-hidden animate-fade-in md:relative"
         >
+            <button type="button" className="self-end bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold" onClick={openPrintDocument} disabled={!user || !weddingId || !!printState}>Imprimir mesas</button>
+            {printState && <MesasPrintDocument busy={printState.busy} error={printState.error || (printState.model && (printState.weddingId !== weddingId || printState.uid !== user?.uid) ? 'La sesión o boda ha cambiado. Cierra el documento.' : null)} model={printState.weddingId === weddingId && printState.uid === user?.uid && !authLoading ? printState.model : null} onClose={() => setPrintState(null)} />}
             {/* MAIN CONTENT SPLIT */}
             <div className="flex flex-col md:flex-row gap-8 flex-1 min-h-0 relative">
 
